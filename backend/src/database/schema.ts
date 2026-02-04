@@ -22,8 +22,10 @@ import { z } from 'zod';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const exerciseIdSchema = z.uuidv4().brand<'ExerciseId'>();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const exerciseTemplateIdSchema = z.uuidv4().brand<'ExerciseTemplateId'>();
+
+export const exerciseTemplateIdSchema = z
+    .uuidv4()
+    .brand<'ExerciseTemplateId'>();
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const actionIdSchema = z.uuidv4().brand<'ActionId'>();
 
