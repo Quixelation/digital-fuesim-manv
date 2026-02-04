@@ -3,17 +3,18 @@ import cors from 'cors';
 import type { Express } from 'express';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { createExerciseRouter } from 'application-routers/exercise-router.js';
-import { healthRouter } from './health-router.js';
+import { createExerciseRouter } from 'routers/exercise-router.js';
 import type { ExerciseManagerService } from './database/services/exercise-manager-service.js';
 import type { AuthService, SessionInformation } from './auth/auth-service.js';
-import { createSessionMiddleware } from './application-routers/application-router.js';
-import { errorHandler } from './utils/http-handlers.js';
-import type { DatabaseService } from './database/services/database-service.js';
+import {
+    createSessionMiddleware,
+    errorHandler,
+} from './utils/http-handlers.js';
 import type { ExerciseService } from './database/services/exercise-service.js';
 import { createAuthRouter } from './auth/auth-http-router.js';
 import { Config } from './config.js';
-import { createExerciseManagerRouter } from './application-routers/exercise-manager-router.js';
+import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
+import { healthRouter } from './routers/health-router.js';
 
 declare global {
     namespace Express {
@@ -27,7 +28,6 @@ export class ApiHttpServer {
     public readonly httpServer: HttpServer;
     public constructor(
         app: Express,
-        databaseService: DatabaseService,
         exerciseService: ExerciseService,
         authService: AuthService,
         exerciseManagerService: ExerciseManagerService
@@ -46,11 +46,12 @@ export class ApiHttpServer {
 
         app.use(express.json({ limit: `${Config.uploadLimit}mb` }));
 
-        app.use(healthRouter);
+        app.use('/api', healthRouter);
 
-        app.use(createExerciseRouter(exerciseService));
+        app.use('/api', createExerciseRouter(exerciseService));
 
         app.use(
+            '/api',
             createExerciseManagerRouter(exerciseManagerService, exerciseService)
         );
 

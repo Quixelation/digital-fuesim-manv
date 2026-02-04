@@ -15,22 +15,17 @@ export const createExerciseManagerRouter = (
 ): Router => {
     const router = Router();
 
-    router.get(
-        '/api/exercises/',
-        isAuthenticatedMiddleware,
-        async (req, res) => {
-            const exercises =
-                await exerciseManagerService.getAllExercisesOfOwner(
-                    req.session!
-                );
+    router.get('/exercises/', isAuthenticatedMiddleware, async (req, res) => {
+        const exercises = await exerciseManagerService.getAllExercisesOfOwner(
+            req.session!
+        );
 
-            res.send(getExercisesResponseDataSchema.encode(exercises));
-        }
-    );
+        res.send(getExercisesResponseDataSchema.encode(exercises));
+    });
 
-    router.use('/api/exercise_templates/', isAuthenticatedMiddleware);
+    router.use('/exercise_templates/', isAuthenticatedMiddleware);
 
-    router.get('/api/exercise_templates/', async (req, res) => {
+    router.get('/exercise_templates/', async (req, res) => {
         const templates =
             await exerciseManagerService.getAllExerciseTemplatesOfOwner(
                 req.session!
@@ -38,7 +33,7 @@ export const createExerciseManagerRouter = (
         res.send(getExerciseTemplatesResponseDataSchema.encode(templates));
     });
 
-    router.post('/api/exercise_templates/', async (req, res) => {
+    router.post('/exercise_templates/', async (req, res) => {
         const parsedData = postExerciseTemplateRequestDataSchema.parse(
             req.body
         );
@@ -54,7 +49,7 @@ export const createExerciseManagerRouter = (
         );
     });
 
-    router.post('/api/exercise_templates/:id/new', async (req, res) => {
+    router.post('/exercise_templates/:id/new', async (req, res) => {
         const newExercise =
             await exerciseManagerService.createExerciseFromTemplate(
                 req.params.id,
@@ -68,7 +63,7 @@ export const createExerciseManagerRouter = (
         });
     });
 
-    router.patch('/api/exercise_templates/:id', async (req, res) => {
+    router.patch('/exercise_templates/:id', async (req, res) => {
         const parsedData = postExerciseTemplateRequestDataSchema.parse(
             req.body
         );
@@ -84,7 +79,7 @@ export const createExerciseManagerRouter = (
         );
     });
 
-    router.delete('/api/exercise_templates/:id', async (req, res) => {
+    router.delete('/exercise_templates/:id', async (req, res) => {
         await exerciseManagerService.deleteExerciseTemplate(
             req.params.id,
             req.session!,

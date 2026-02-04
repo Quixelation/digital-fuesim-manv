@@ -11,7 +11,7 @@ export const createExerciseRouter = (
     exerciseService: ExerciseService
 ): Router => {
     const router = Router();
-    router.post('/api/exercise', async (req, res) => {
+    router.post('/exercise', async (req, res) => {
         const exercise = isEmpty(req.body)
             ? ExerciseFactory.fromBlank()
             : importExercise(req.body);
@@ -25,7 +25,7 @@ export const createExerciseRouter = (
         });
     });
 
-    router.get('/api/exercise/:exerciseKey', async (req, res) => {
+    router.get('/exercise/:exerciseKey', async (req, res) => {
         if (!isExerciseKey(req.params.exerciseKey)) {
             throw new ApiError();
         }
@@ -40,7 +40,7 @@ export const createExerciseRouter = (
         );
     });
 
-    router.delete('/api/exercise/:exerciseKey', async (req, res) => {
+    router.delete('/exercise/:exerciseKey', async (req, res) => {
         if (!isExerciseKey(req.params.exerciseKey)) {
             throw new ApiError();
         }
@@ -51,7 +51,7 @@ export const createExerciseRouter = (
         res.status(204).send();
     });
 
-    router.get('/api/exercise/:exerciseKey/history', async (req, res) => {
+    router.get('/exercise/:exerciseKey/history', async (req, res) => {
         if (!isExerciseKey(req.params.exerciseKey)) {
             throw new ApiError();
         }
