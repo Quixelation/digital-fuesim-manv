@@ -3,15 +3,17 @@ import cors from 'cors';
 import type { Express } from 'express';
 import express from 'express';
 import cookieParser from 'cookie-parser';
-import { HealthHttpRouter } from './health-router.js';
+import { createExerciseRouter } from 'application-routers/exercise-router.js';
+import { healthRouter } from './health-router.js';
 import type { ExerciseManagerService } from './database/services/exercise-manager-service.js';
 import type { AuthService, SessionInformation } from './auth/auth-service.js';
-import { ApplicationRouter } from './application-routers/application-router.js';
+import { createSessionMiddleware } from './application-routers/application-router.js';
 import { errorHandler } from './utils/http-handlers.js';
 import type { DatabaseService } from './database/services/database-service.js';
 import type { ExerciseService } from './database/services/exercise-service.js';
-import { AuthHttpRouter } from './auth/auth-http-router.js';
+import { createAuthRouter } from './auth/auth-http-router.js';
 import { Config } from './config.js';
+import { createExerciseManagerRouter } from './application-routers/exercise-manager-router.js';
 
 declare global {
     namespace Express {
@@ -40,19 +42,19 @@ export class ApiHttpServer {
         );
 
         app.use(cookieParser());
+        app.use(createSessionMiddleware(authService));
 
         app.use(express.json({ limit: `${Config.uploadLimit}mb` }));
 
-        app.use(new HealthHttpRouter().router);
+        app.use(healthRouter);
+
+        app.use(createExerciseRouter(exerciseService));
+
         app.use(
-            new ApplicationRouter(
-                authService,
-                exerciseService,
-                exerciseManagerService
-            ).router
+            createExerciseManagerRouter(exerciseManagerService, exerciseService)
         );
 
-        app.use('/api/auth', new AuthHttpRouter(authService).router);
+        app.use('/api/auth', createAuthRouter(authService));
 
         app.use(errorHandler);
 
