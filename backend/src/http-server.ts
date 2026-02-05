@@ -15,6 +15,8 @@ import type { ExerciseService } from './database/services/exercise-service.js';
 import { Config } from './config.js';
 import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
 import { healthRouter } from './routers/health-router.js';
+import { apiRoutingDefinition } from 'digital-fuesim-manv-shared';
+import { implementRouter, serverRoutes } from './pretty-good-routing.js';
 
 declare global {
     namespace Express {
@@ -56,6 +58,8 @@ export class ApiHttpServer {
         );
 
         app.use('/api/auth', createAuthRouter(authService));
+
+        app.use("/fuck",implementRouter(apiRoutingDefinition.router, serverRoutes));
 
         app.use(errorHandler);
 
