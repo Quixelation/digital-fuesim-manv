@@ -6,8 +6,6 @@ export class PrettyGoodRoutingDefinition<MainRouter extends RouterDefinition<any
     ) { }
 }
 
-type RouterDefinition = Record<string, RouterDefinition<any> | RouteDefinition>;
-
 export class RouterDefinition<T extends RouteType = any> {
     constructor(
         public path: string,
@@ -40,15 +38,3 @@ export abstract class PrettyGoodRouterHandler<D, Middleware = any> {
         this.middleware = middleware;
     }
 }
-
-
-
-
-type RouterFromDefinition<D extends PrettyGoodRoutingDefinition> = D extends PrettyGoodRoutingDefinition<infer R> ? R : never;
-
-
-
-export type ImplementationStructureFromDefinition<D extends PrettyGoodRoutingDefinition> = PrettyGoodRouterHandler<InferImplementationStructureFromRouter<RouterFromDefinition<D>>>;
-
-
-

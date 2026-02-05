@@ -1,13 +1,9 @@
-import { ImplementationStructureFromDefinition, apiRoutingDefinition } from "digital-fuesim-manv-shared";
-import { RouterHandler, RouteHandler } from "../pretty-good-routing.js";
+import { apiRoutingDefinition } from "digital-fuesim-manv-shared";
+import { RouterHandler, RouteHandler, InferImplementationStructureFromRouter } from "../pretty-good-routing.js";
+import { healthRouter } from "./health-router.js";
 
-export const serverRoutes = new RouterHandler({
-    health: new RouteHandler((req, res, next) => {
-        console.log("Health check");
-        next();
-    }, (req, res) => {
-        res.send("ok");
-    }),
+export const serverRoutes = new RouterHandler<InferImplementationStructureFromRouter<typeof apiRoutingDefinition.router>>({
+    health: healthRouter,
     users: new RouterHandler({
         getUser: new RouteHandler((req, res) => { }),
         createUser: new RouteHandler((req, res) => { }),
@@ -15,4 +11,4 @@ export const serverRoutes = new RouterHandler({
 }, (req, res, next) => {
     console.log(`Request to ${req.path}`);
     next();
-}) satisfies ImplementationStructureFromDefinition<typeof apiRoutingDefinition>;
+})
