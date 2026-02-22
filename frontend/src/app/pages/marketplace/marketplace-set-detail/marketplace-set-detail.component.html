@@ -1,0 +1,64 @@
+@if (selectedSetData() !== null) {
+    <div class="d-flex flex-row justify-content-between container w-100">
+        <h2>{{ selectedSetData()!.setData.title }}</h2>
+
+        <div class="d-flex flex-row gap-2 align-items-center">
+            <button class="btn btn-outline-danger" type="button" (click)="deleteSet()">
+                <i class="bi bi-trash"></i>
+            </button>
+            <button type="button" class="btn btn-outline-primary" (click)="duplicateSet()">
+                <i class="bi bi-copy"></i>
+            </button>
+            @if (selectedSetData()!.setData.visibility === 'private') {
+                <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    ngbTooltip="Dieses Set veröffentlichen"
+                >
+                    <i class="bi bi-globe" (click)="makeSetPublic()" )></i>
+                </button>
+            }
+            <button type="button" class="btn btn-outline-primary">
+                <i class="bi bi-clock-history"></i>
+            </button>
+            <div ngbDropdown>
+                <button
+                    type="button"
+                    class="btn btn-outline-primary"
+                    ngbDropdownToggle
+                >
+                    Neues Übungselement
+                </button>
+                <div ngbDropdownMenu>
+                    <button ngbDropdownItem (click)="createNewVehicle()">
+                        Fahrzeug
+                    </button>
+                    <button ngbDropdownItem>Kartenbild</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
+            @for (
+                exerciseObject of selectedSetData()!.objects;
+                track exerciseObject.versionId
+            ) {
+                @switch (exerciseObject.content.type) {
+                    @case ('vehicleTemplate') {
+                        <app-map-editor-card
+                            [imageUrl]="exerciseObject.content.image.url"
+                            [title]="exerciseObject.title"
+                            [enableDeleteButton]="true"
+                            [enableEditButton]="true"
+                            (elementDelete)="
+                                deleteExerciseObject(exerciseObject.entityId)
+                            "
+                            (elementEdit)="editVehicle(exerciseObject)"
+                        />
+                    }
+                }
+            }
+        </div>
+    </div>
+}

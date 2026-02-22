@@ -9,7 +9,7 @@ export abstract class BaseRepository {
         protected readonly databaseConnection:
             | DatabaseConnection
             | DatabaseTransaction
-    ) {}
+    ) { }
 
     /**
      * Starts a new transaction
@@ -57,5 +57,13 @@ export abstract class BaseRepository {
             throw new Error('Multiple entries found where only one expected');
         }
         return array[0];
+    }
+
+    protected onlySingleStrict<T>(array: T[]): T {
+        const result = this.onlySingle(array);
+        if (result === null) {
+            throw new Error('No entries found where one expected');
+        }
+        return result;
     }
 }

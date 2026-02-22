@@ -1,0 +1,50 @@
+<app-header />
+
+<div class="d-flex flex-row gap-3 container">
+    <div>
+        <div class="d-flex align-items-center justify-content-between">
+            <h4>Meine Sets</h4>
+            <button
+                (click)="createNewExercise()"
+                class="btn btn-sm btn-primary"
+            >
+                <i class="bi bi-plus"></i>
+            </button>
+        </div>
+
+        <ul ngbNav class="flex-column gap-3" #nav="ngbNav">
+            @for (elementSet of elementSets; track elementSet.versionId) {
+                <li ngbNavItem class="">
+                    <a
+                        [routerLink]="'/marketplace/' + elementSet.versionId"
+                        class="d-flex flex-column align-items-start text-decoration-none"
+                    >
+                        <span>{{ elementSet.title }}</span>
+                        <small
+                            class="d-flex flex-row align-items-center gap-1 text-secondary"
+                            ><span
+                                class="badge"
+                                [class.text-bg-success]="
+                                    elementSet.visibility === 'public'
+                                "
+                                [class.text-bg-secondary]="
+                                    elementSet.visibility === 'private'
+                                "
+                            >
+                                {{
+                                    elementSet.visibility === 'public'
+                                        ? 'Öffentlich'
+                                        : 'Privat'
+                                }}
+                            </span>
+                            &middot; 5 Elemente</small
+                        >
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+    <div class="flex-grow-1">
+        <router-outlet></router-outlet>
+    </div>
+</div>

@@ -1,14 +1,14 @@
 import type {
     ActionId,
     ExerciseAction,
-    ExerciseId,
+    ExerciseElementObjectUnion,
     ExerciseState,
-    ExerciseTemplateId,
+    Marketplace,
     ParticipantKey,
     TrainerKey,
 } from 'fuesim-digital-shared';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { relations, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, max, relations, sql } from 'drizzle-orm';
 import {
     char,
     integer,
@@ -19,16 +19,33 @@ import {
     foreignKey,
     varchar,
     timestamp,
+    unique,
     text,
+    pgView,
+    pgEnum,
 } from 'drizzle-orm/pg-core';
 
-const typedUUID = <T>() => uuid().$type<T>();
+const typedUUID = <T = string>() => uuid().$type<T>();
+const defaultUUID = <T = string>() =>
+    typedUUID<T>().default(sql`uuid_generate_v4()`);
+const defaultPrefixedUUID = (prefix: string) =>
+    varchar().$defaultFn(() => `${prefix}_${crypto.randomUUID()}`);
+
+export type ActionId = z.infer<typeof actionIdSchema>;
+export type ExerciseTemplateId = z.infer<typeof exerciseTemplateIdSchema>;
+export type ExerciseId = z.infer<typeof exerciseIdSchema>;
+
+const actionIdSchema = z.uuidv4().brand<'ActionId'>();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+    .brand<'ExerciseTemplateId'>();
+    .uuidv4()
+export const exerciseTemplateIdSchema = z
+
+const exerciseIdSchema = z.uuidv4().brand<'ExerciseId'>();
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 
 const baseTable = <T>() => ({
-    id: typedUUID<T>()
-        .default(sql`uuid_generate_v4()`)
-        .primaryKey()
-        .notNull(),
+    id: defaultUUID<T>().primaryKey().notNull(),
 });
 
 export const userTable = pgTable('users', {
@@ -131,6 +148,121 @@ export const actionTable = pgTable(
     ]
 );
 export type ActionEntry = InferSelectModel<typeof actionTable>;
+
+const stateVersionedEntity = <EntityBrand, VersionBrand>(prefix: string) => ({
+    versionId: defaultPrefixedUUID(prefix + '_version')
+        .notNull()
+        .primaryKey()
+        .$type<VersionBrand>(),
+    entityId: defaultPrefixedUUID(prefix + '_entity')
+        .notNull()
+        .$type<EntityBrand>(),
+    version: integer().notNull(),
+    stateVersion: integer().notNull(),
+    createdBy: varchar().notNull().default('unknown'), //TODO: @Quixelation - replace with actual user id when creating sets and elements
+    createdAt: timestamp({ withTimezone: true, mode: 'date' })
+        .defaultNow()
+        .notNull(),
+});
+
+export const setVisibilityEnum = pgEnum('exercise_set_visibility', [
+    'private',
+    'public',
+]);
+
+export const exerciseElementSetTable = pgTable(
+    'exercise_element_sets',
+    {
+        ...stateVersionedEntity<
+            Marketplace.Set.EntityId,
+            Marketplace.Set.VersionId
+        >('set'),
+        title: varchar().notNull(),
+        description: varchar().notNull(),
+        visibility: setVisibilityEnum().notNull().default('private'),
+        owner: varchar().notNull(),
+    },
+    (table) => [
+        unique('unique_set_version').on(table.entityId, table.version),
+        unique('unique_set_id').on(table.entityId, table.versionId),
+    ]
+);
+
+export const elementTemplateToSetMappingTable = pgTable(
+    'exercise_element_to_set_mapping',
+    {
+        setEntityId: varchar().notNull().references(() => exerciseElementSetTable.entityId, {
+            onDelete: 'cascade',
+        }),
+        setVersionId: varchar().notNull().references(() => exerciseElementSetTable.versionId, {
+            onDelete: 'cascade',
+        }),
+        elementEntityId: varchar().notNull().references(() => exerciseElementTemplateTable.entityId, {
+            onDelete: 'cascade',
+        }),
+        elementVersionId: varchar().notNull().references(() => exerciseElementTemplateTable.versionId, {
+            onDelete: 'cascade',
+        }),
+    },
+    (table) => [
+        unique('unique_element_set_mapping').on(
+            table.setVersionId,
+            table.elementVersionId
+        ),
+    ]
+);
+
+export const exerciseElementTemplateTable = pgTable(
+    'exercise_element_templates',
+    {
+        ...stateVersionedEntity<
+            Marketplace.Element.EntityId,
+            Marketplace.Element.VersionId
+        >('element'),
+        title: varchar().notNull(),
+        description: varchar().notNull(),
+        content: json().$type<ExerciseElementObjectUnion>().notNull(),
+    },
+    (table) => [
+        unique('unique_template_version').on(table.entityId, table.version),
+        unique('unique_template_id').on(table.entityId, table.versionId),
+    ]
+);
+
+export const latestExerciseElementTemplateVersionNumbersView = pgView(
+    'latest_exercise_element_template_version_numbers'
+).as((qb) =>
+    qb
+        .select({
+            entityId: exerciseElementTemplateTable.entityId,
+            latestversion: max(exerciseElementTemplateTable.version).as(
+                'latestversion'
+            ),
+        })
+        .from(exerciseElementTemplateTable)
+        .groupBy(exerciseElementTemplateTable.entityId)
+);
+
+export const latestExerciseElementTemplateView = pgView(
+    'latest_exercise_element_templates'
+).as((qb) =>
+    qb
+        .select(getTableColumns(exerciseElementTemplateTable))
+        .from(exerciseElementTemplateTable)
+        .innerJoin(
+            latestExerciseElementTemplateVersionNumbersView,
+            and(
+                eq(
+                    exerciseElementTemplateTable.entityId,
+                    latestExerciseElementTemplateVersionNumbersView.entityId
+                ),
+                eq(
+                    exerciseElementTemplateTable.version,
+                    latestExerciseElementTemplateVersionNumbersView.latestversion
+                )
+            )
+        )
+);
 
 export const actionEntityRelations = relations(actionTable, ({ one }) => ({
     exerciseWrapperEntity: one(exerciseTable, {

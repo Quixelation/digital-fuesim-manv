@@ -51,7 +51,7 @@ import { ValuesPipe } from '../../../../../../shared/pipes/values.pipe';
         ValuesPipe,
     ],
 })
-export class VehicleTemplateFormComponent implements OnChanges {
+export class VehicleTemplateFormComponent {
     private readonly messageService = inject(MessageService);
     private readonly store = inject<Store<AppState>>(Store);
 

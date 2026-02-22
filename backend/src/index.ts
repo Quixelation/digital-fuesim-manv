@@ -12,6 +12,8 @@ import { UserRepository } from './database/repositories/user-repository.js';
 import { SessionRepository } from './database/repositories/session-repository.js';
 import { AuthService } from './auth/auth-service.js';
 import { ExerciseManagerService } from './database/services/exercise-manager-service.js';
+import { ExerciseElementSetRepository } from './database/repositories/exercise-element-set-repository.js';
+import { ExerciseElementSetService } from './database/services/exercise-set-service.js';
 
 async function main() {
     Config.initialize();
@@ -43,6 +45,9 @@ async function main() {
     const sessionRepository = new SessionRepository(
         databaseService.databaseConnection
     );
+    const exerciseElementSetRepository = new ExerciseElementSetRepository(
+        databaseService.databaseConnection
+    );
 
     const exerciseService = new ExerciseService(
         exerciseRepository,
@@ -51,6 +56,9 @@ async function main() {
     const exerciseManagerService = new ExerciseManagerService(
         exerciseRepository,
         actionRepository
+    );
+    const exerciseElementSetService = new ExerciseElementSetService(
+        exerciseElementSetRepository
     );
 
     let authService: AuthService;
@@ -104,7 +112,8 @@ async function main() {
         databaseService,
         exerciseService,
         authService,
-        exerciseManagerService
+        exerciseManagerService,
+        exerciseElementSetService
     );
 }
 

@@ -6,6 +6,7 @@ import type { DatabaseService } from './database/services/database-service.js';
 import type { ExerciseService } from './database/services/exercise-service.js';
 import type { AuthService } from './auth/auth-service.js';
 import type { ExerciseManagerService } from './database/services/exercise-manager-service.js';
+import { ExerciseElementSetService } from './database/services/exercise-set-service.js';
 
 export class FuesimServer {
     private readonly _httpServer: ApiHttpServer;
@@ -23,7 +24,8 @@ export class FuesimServer {
         private readonly databaseService: DatabaseService,
         private readonly exerciseService: ExerciseService,
         private readonly authService: AuthService,
-        private readonly exerciseManagerService: ExerciseManagerService
+        private readonly exerciseManagerService: ExerciseManagerService,
+        private readonly exerciseElementSetService: ExerciseElementSetService
     ) {
         const app = express();
         this._websocketServer = new ExerciseWebsocketServer(
@@ -35,7 +37,8 @@ export class FuesimServer {
             app,
             exerciseService,
             authService,
-            exerciseManagerService
+            exerciseManagerService,
+            exerciseElementSetService
         );
 
         this.saveHandler = new PeriodicEventHandler(

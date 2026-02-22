@@ -15,6 +15,8 @@ import type { ExerciseService } from './database/services/exercise-service.js';
 import { Config } from './config.js';
 import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
 import { healthRouter } from './routers/health-router.js';
+import { ExerciseElementSetService } from './database/services/exercise-set-service.js';
+import { createExerciseObjectsRouter } from './routers/exercise-objects-router.js';
 
 declare global {
     namespace Express {
@@ -30,7 +32,8 @@ export class ApiHttpServer {
         app: Express,
         exerciseService: ExerciseService,
         authService: AuthService,
-        exerciseManagerService: ExerciseManagerService
+        exerciseManagerService: ExerciseManagerService,
+        exerciseElementSetService: ExerciseElementSetService
     ) {
         Config.initialize();
 
@@ -56,6 +59,11 @@ export class ApiHttpServer {
         );
 
         app.use('/api/auth', createAuthRouter(authService));
+
+        app.use(
+            '/api/element-set',
+            createExerciseObjectsRouter(exerciseElementSetService)
+        );
 
         app.use(errorHandler);
 

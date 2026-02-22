@@ -1,0 +1,80 @@
+<div class="modal-header">
+    <h4 class="modal-title">Fahrzeugvorlage</h4>
+</div>
+<div class="">
+    <div class="d-flex flex-row">
+        @if (isEditMode) {
+            <ul class="list-group rounded-0">
+                @if (versionHistory() !== null) {
+                    @for (
+                        version of versionHistory();
+                        track version.versionId
+                    ) {
+                        @let isCurrentVersion =
+                            version.version === currentVersion;
+                        @let isSelectedVersion =
+                            version.version === selectedVersion();
+                        <li
+                            class="list-group-item d-flex flex-column small text-nowrap"
+                            [class.active]="isSelectedVersion"
+                            [class.text-primary]="
+                                isCurrentVersion && !isSelectedVersion
+                            "
+                            [aria-current]="isCurrentVersion ? 'true' : 'false'"
+                            (click)="selectVersion(version.version)"
+                            role="button"
+                        >
+                            <b
+                                >Version {{ version.version }} (<span
+                                    class="font-monospace"
+                                    >{{ version.stateVersion }}</span
+                                >)
+                            </b>
+                            <span>{{ version.createdAt | localeDate }}</span>
+                        </li>
+                    }
+                } @else {
+                    <span>Versionen laden</span>
+                }
+            </ul>
+        }
+        <div class="modal-body">
+            @if (isEditMode && selectedVersion() !== currentVersion) {
+                @if (selectedVehicleVersionData()) {
+                    <app-vehicle-template-form
+                        [disabled]="true"
+                        [initialValues]="selectedVehicleVersionData()!"
+                    ></app-vehicle-template-form>
+                }
+
+                <div class="alert alert-warning" role="alert">
+                    Sie betrachten eine frühere Version der Fahrzeugvorlage.
+                    <br />
+                    Bitte wechseln Sie zurück zur aktuellen Version, um
+                    Änderungen vorzunehmen.
+                </div>
+            } @else {
+                <app-vehicle-template-form
+                    [initialValues]="{
+                        url: editableVehicleTemplateValues.url,
+                        height: editableVehicleTemplateValues.height,
+                        name: editableVehicleTemplateValues.name,
+                        type: editableVehicleTemplateValues.type,
+                        patientCapacity:
+                            editableVehicleTemplateValues.patientCapacity,
+                        materialTemplates:
+                            editableVehicleTemplateValues.materialTemplates,
+                        personnelTemplates:
+                            editableVehicleTemplateValues.personnelTemplates,
+                    }"
+                    (submitVehicleTemplate)="submitVehicleTemplate($event)"
+                    [btnText]="
+                        isEditMode
+                            ? 'Änderungen speichern'
+                            : 'Fahrzeugvorlage hinzufügen'
+                    "
+                ></app-vehicle-template-form>
+            }
+        </div>
+    </div>
+</div>
