@@ -4,12 +4,8 @@ import {
     ExerciseElementSetSubscriptionData,
 } from '../../../core/exercise-element.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import {
-    ExerciseElementObjectDto,
-    ExerciseElementSetDto,
-    uuid,
-} from 'fuesim-digital-shared';
-import { BehaviorSubject, Observable, Subject, takeUntil } from 'rxjs';
+import { Marketplace, uuid } from 'fuesim-digital-shared';
+import { Subject, takeUntil } from 'rxjs';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { VehicleElementModalComponent } from '../vehicle-element-modal/vehicle-element-modal.component';
 import {
@@ -30,7 +26,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
     private readonly ngbModalService = inject(NgbModal);
     private readonly router = inject(Router);
 
-    private _setVersionId?: string;
+    private _setEntityId!: Marketplace.Set.EntityId;
 
     private readonly destroy$ = new Subject<void>();
 
@@ -39,23 +35,20 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
     );
 
     constructor() {
-        this.initParamSubscription();
-    }
-
-    private initParamSubscription() {
         this.activatedRoute.paramMap
             .pipe(takeUntil(this.destroy$))
             .subscribe((params) => {
-                const setVersionId = params.get('setVersionId');
-                //TODO: @Quixelation parse/validate setVersionId exists
-                if (!setVersionId) {
-                    throw new Error('setVersionId is null');
+                const setEntityId = params.get('setEntityId') ?? '';
+
+                if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+                    this.router.navigate(['/marketplace']);
+                    return;
                 }
 
-                this._setVersionId = setVersionId;
+                this._setEntityId = setEntityId;
 
                 this.exerciseElementSetService.subscribeToElementSet(
-                    setVersionId,
+                    setEntityId,
                     (data) => {
                         this.selectedSetData.set(data);
                     }
@@ -68,7 +61,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
         if (!selectedSetData) {
             throw new Error('selectedSetData is null');
         }
-        const elementSetId = selectedSetData.setData.versionId;
+        const elementSetId = selectedSetData.setData.entityId;
 
         const modal = this.ngbModalService.open(VehicleElementModalComponent, {
             size: 'xl',
@@ -104,7 +97,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
         };
     }
 
-    public editVehicle(entity: ExerciseElementObjectDto) {
+    public editVehicle(entity: Marketplace.Element.Dto) {
         if (entity.content.type !== 'vehicleTemplate') {
             throw new Error('Entity is not a vehicleTemplate');
         }
@@ -156,35 +149,41 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
                     personnelTemplateIds,
                     patientCapacity,
                     vehicleType: type,
-                })
+                }),
+                this._setEntityId
             );
         };
     }
 
-    public async deleteExerciseObject(entityId: string) {
+    public async deleteExerciseObject(entityId: Marketplace.Element.EntityId) {
         await this.exerciseElementSetService.deleteExerciseElementObject(
-            entityId
+            entityId,
+            this._setEntityId
         );
     }
 
     public async makeSetPublic() {
-        if (!this._setVersionId) return;
+        if (!this._setEntityId) return;
 
-        await this.exerciseElementSetService.makeSetPublic(this._setVersionId);
+        await this.exerciseElementSetService.makeSetPublic(this._setEntityId);
     }
 
     public async duplicateSet() {
-        if (!this._setVersionId) return;
-        console.log('duplicateSet', this._setVersionId);
+        const selectedVersion = this.selectedSetData()?.setData.versionId;
+        if (!selectedVersion) return;
+        console.log('duplicateSet', this._setEntityId);
 
-        await this.exerciseElementSetService.duplicateSet(this._setVersionId);
+        await this.exerciseElementSetService.duplicateSet(
+            this._setEntityId,
+            selectedVersion
+        );
     }
 
     public async deleteSet() {
-        if (!this._setVersionId) return;
+        if (!this._setEntityId) return;
 
         await this.exerciseElementSetService.deleteExerciseElementSet(
-            this._setVersionId
+            this._setEntityId
         );
 
         this.router.navigate(['/marketplace']);

@@ -15,7 +15,7 @@ const routes: Routes = [
                 component: MarketplaceComponent,
             },
             {
-                path: ':setVersionId',
+                path: ':setEntityId',
                 component: MarketplaceSetDetailComponent,
             },
         ],

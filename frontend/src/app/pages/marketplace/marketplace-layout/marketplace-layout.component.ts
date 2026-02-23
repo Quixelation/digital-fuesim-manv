@@ -1,5 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { ExerciseElementService } from '../../../core/exercise-element.service';
+import { Marketplace } from 'fuesim-digital-shared';
+import { ActivatedRoute, Event, NavigationEnd, Router } from '@angular/router';
+import { Subject, takeUntil } from 'rxjs';
 
 @Component({
     selector: 'app-marketplace-layout',
@@ -7,11 +10,46 @@ import { ExerciseElementService } from '../../../core/exercise-element.service';
     templateUrl: './marketplace-layout.component.html',
     styleUrl: './marketplace-layout.component.scss',
 })
-export class MarketplaceLayoutComponent {
+export class MarketplaceLayoutComponent implements OnDestroy {
     private readonly exerciseElementService = inject(ExerciseElementService);
+    private readonly router = inject(Router);
+
+    private readonly destroy$ = new Subject<void>();
+
+    public currentlySelectedSetEntityId =
+        signal<Marketplace.Set.EntityId | null>(null);
 
     public constructor() {
         this.exerciseElementService.loadElementSets();
+        this.router.events
+            .pipe(takeUntil(this.destroy$))
+            .subscribe((event: Event) => {
+                if (event instanceof NavigationEnd) {
+                    const urlSegments = event.urlAfterRedirects.split('/');
+                    const marketplaceIndex = urlSegments.findIndex(
+                        (segment) => segment === 'marketplace'
+                    );
+
+                    const setEntityIdIndex = marketplaceIndex + 1;
+
+                    if (
+                        marketplaceIndex === -1 ||
+                        urlSegments.length <= setEntityIdIndex
+                    )
+                        return;
+
+                    const setEntityIdSegment =
+                        urlSegments[marketplaceIndex + 1];
+
+                    if (!setEntityIdSegment) return;
+
+                    this.currentlySelectedSetEntityId.set(
+                        Marketplace.Set.isSetEntityId(setEntityIdSegment)
+                            ? setEntityIdSegment
+                            : null
+                    );
+                }
+            });
     }
 
     public get elementSets() {
@@ -25,5 +63,10 @@ export class MarketplaceLayoutComponent {
         await this.exerciseElementService.createElementSet(
             exerciseSetName ?? 'New Exercise Set'
         );
+    }
+
+    public ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
     }
 }

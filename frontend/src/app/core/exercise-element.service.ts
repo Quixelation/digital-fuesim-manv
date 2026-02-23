@@ -1,17 +1,12 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, signal } from '@angular/core';
-import {
-    ElementSetVisibility,
-    ExerciseElementObjectDto,
-    Marketplace,
-    type ExerciseElementSetDto,
-} from 'fuesim-digital-shared';
+import { Marketplace } from 'fuesim-digital-shared';
 import { BehaviorSubject, lastValueFrom } from 'rxjs';
 import { httpOrigin } from './api-origins';
 
 export type ExerciseElementSetSubscriptionData = {
-    setData: ExerciseElementSetDto;
-    objects: ExerciseElementObjectDto[];
+    setData: Marketplace.Set.Dto;
+    objects: Marketplace.Element.Dto[];
 };
 
 @Injectable({
@@ -19,9 +14,9 @@ export type ExerciseElementSetSubscriptionData = {
 })
 export class ExerciseElementService {
     public readonly ENDPOINT = httpOrigin + '/api/element-set';
-    private _elementSets = signal<ExerciseElementSetDto[]>([]);
+    private _elementSets = signal<Marketplace.Set.Dto[]>([]);
     private _elementSetSubscriptions = new Map<
-        string,
+        Marketplace.Set.EntityId,
         BehaviorSubject<ExerciseElementSetSubscriptionData>
     >();
 
@@ -31,26 +26,42 @@ export class ExerciseElementService {
 
     constructor(private readonly httpClient: HttpClient) {}
 
+    private updateElementSetVersion(
+        setEntityId: Marketplace.Set.EntityId,
+        newSetVersionId: Marketplace.Set.VersionId
+    ) {
+        this._elementSets.update((val) =>
+            val.map((m) =>
+                m.entityId === setEntityId
+                    ? {
+                          ...m,
+                          versionId: newSetVersionId,
+                      }
+                    : m
+            )
+        );
+    }
+
     public async subscribeToElementSet(
-        setVersionId: string,
+        setEntityId: Marketplace.Set.EntityId,
         callback: (data: ExerciseElementSetSubscriptionData) => void
     ) {
         const [elementSet, setObjects] = await Promise.all([
-            this.getElementSetByVersionId(setVersionId),
-            this.getLatestElementSetObjectsBySetId(setVersionId),
+            this.getElementSetByEntityId(setEntityId),
+            this.getLatestElementSetObjectsBySetId(setEntityId),
         ]);
 
         this._elementSetSubscriptions.set(
-            setVersionId,
+            setEntityId,
             new BehaviorSubject({
                 setData: elementSet,
                 objects: setObjects,
             })
         );
 
-        this._elementSetSubscriptions.get(setVersionId)!.subscribe((data) => {
+        this._elementSetSubscriptions.get(setEntityId)!.subscribe((data) => {
             console.log(
-                `Subscription for setVersionId ${setVersionId} received update:`,
+                `Subscription for setVersionId ${setEntityId} received update:`,
                 data
             );
             callback(data);
@@ -67,17 +78,19 @@ export class ExerciseElementService {
         this._elementSets.set(data.result);
     }
 
-    public async getElementSetByVersionId(versionId: string) {
+    public async getElementSetByEntityId(entityId: Marketplace.Set.EntityId) {
         const data = await lastValueFrom(
             this.httpClient.get<typeof Marketplace.Set.GetByVersionId.Response>(
-                `${this.ENDPOINT}/${versionId}`
+                `${this.ENDPOINT}/${entityId}`
             )
         );
 
         return data.result;
     }
 
-    public async getLatestElementSetObjectsBySetId(setId: string) {
+    public async getLatestElementSetObjectsBySetId(
+        setId: Marketplace.Set.EntityId
+    ) {
         const data = await lastValueFrom(
             this.httpClient.get<
                 typeof Marketplace.Set.GetLatestElementsBySetVersionId.Response
@@ -89,20 +102,29 @@ export class ExerciseElementService {
         return data.result;
     }
 
-    public async deleteExerciseElementObject(entityId: string) {
-        await lastValueFrom(
-            this.httpClient.delete(`${this.ENDPOINT}/object/${entityId}`)
+    public async deleteExerciseElementObject(
+        elementEntityId: Marketplace.Element.EntityId,
+        setEntityId: Marketplace.Set.EntityId
+    ) {
+        const result = await lastValueFrom(
+            this.httpClient.delete<typeof Marketplace.Element.Delete.Response>(
+                `${this.ENDPOINT}/${setEntityId}/entity/${elementEntityId}`
+            )
         );
 
-        for (const subscription of this._elementSetSubscriptions.values()) {
-            const value = subscription.getValue();
+        this.updateElementSetVersion(setEntityId, result.newSetVersionId);
+
+        for (const subscription of this._elementSetSubscriptions.entries()) {
+            if (subscription[0] !== setEntityId) continue;
+
+            const value = subscription[1].getValue();
             const newValue = {
                 ...value,
                 objects: value.objects.filter(
-                    (object) => object.entityId !== entityId
+                    (object) => object.entityId !== elementEntityId
                 ),
             };
-            subscription.next(newValue);
+            subscription[1].next(newValue);
         }
     }
 
@@ -123,33 +145,36 @@ export class ExerciseElementService {
     }
 
     public async createElementObject(
-        elementSetVersionId: string,
+        setEntityId: Marketplace.Set.EntityId,
         content: object
     ) {
         const data = await lastValueFrom(
             this.httpClient.post<typeof Marketplace.Element.Create.Response>(
-                `${this.ENDPOINT}/${elementSetVersionId}/create`,
+                `${this.ENDPOINT}/${setEntityId}/create`,
                 Marketplace.Element.Create.requestSchema.parse({
                     data: content,
                 })
             )
         );
 
+        this.updateElementSetVersion(setEntityId, data.newSetVersionId);
+
         for (const subscription of this._elementSetSubscriptions.entries()) {
-            if (subscription[0] === elementSetVersionId) {
-                const currentValue = subscription[1].getValue();
-                const newValue = {
-                    ...currentValue,
-                    objects: [...currentValue.objects, data.result],
-                };
-                subscription[1].next(newValue);
-            }
+            if (subscription[0] !== setEntityId) continue;
+
+            const value = subscription[1].getValue();
+            subscription[1].next({
+                ...value,
+                objects: [...value.objects, data.result],
+            });
         }
 
         return data.result;
     }
 
-    public async getElementObjectVersions(entityId: string) {
+    public async getElementObjectVersions(
+        entityId: Marketplace.Element.EntityId
+    ) {
         const data = await lastValueFrom(
             this.httpClient.get<
                 typeof Marketplace.Element.GetByEntityId.Response
@@ -159,15 +184,21 @@ export class ExerciseElementService {
         return data.result;
     }
 
-    public async updateElementObject(entityId: string, content: object) {
+    public async updateElementObject(
+        entityId: Marketplace.Element.EntityId,
+        content: object,
+        setEntityId: Marketplace.Set.EntityId
+    ) {
         const data = await lastValueFrom(
             this.httpClient.put<typeof Marketplace.Element.Edit.Response>(
-                `${this.ENDPOINT}/object/${entityId}`,
+                `${this.ENDPOINT}/${setEntityId}/entity/${entityId}`,
                 Marketplace.Element.Edit.requestSchema.parse({
                     data: content,
                 })
             )
         );
+
+        this.updateElementSetVersion(setEntityId, data.newSetVersionId);
 
         for (const subscription of this._elementSetSubscriptions.values()) {
             const currentValue = subscription.getValue();
@@ -183,7 +214,7 @@ export class ExerciseElementService {
         return data.result;
     }
 
-    public async makeSetPublic(setEntityId: string) {
+    public async makeSetPublic(setEntityId: Marketplace.Set.EntityId) {
         const data = await lastValueFrom(
             this.httpClient.post<
                 typeof Marketplace.Set.ChangeVisibility.Response
@@ -214,35 +245,31 @@ export class ExerciseElementService {
         }
     }
 
-    public async duplicateSet(setVersionId: string) {
+    public async duplicateSet(
+        setVersionId: Marketplace.Set.EntityId,
+        specificSetVersionId: Marketplace.Set.VersionId
+    ) {
         const data = await lastValueFrom(
             this.httpClient.post<typeof Marketplace.Set.Duplicate.Response>(
-                `${this.ENDPOINT}/${setVersionId}/duplicate`,
+                `${this.ENDPOINT}/${setVersionId}/version/${specificSetVersionId}/duplicate`,
                 {}
             )
         );
-
-        console.log({ data });
 
         this._elementSets.update((elementSets) => [
             ...elementSets,
             data.createdSet,
         ]);
     }
-    public async deleteExerciseElementSet(versionId: string) {
+    public async deleteExerciseElementSet(
+        setEntityId: Marketplace.Set.EntityId
+    ) {
         await lastValueFrom(
-            this.httpClient.delete(`${this.ENDPOINT}/${versionId}/entity`)
+            this.httpClient.delete(`${this.ENDPOINT}/${setEntityId}/entity`)
         );
 
-        this._elementSets.update((elementSets) =>
-            elementSets.filter((set) => set.versionId !== versionId)
+        this._elementSets.update((val) =>
+            val.filter((f) => f.entityId !== setEntityId)
         );
-
-        for (const subscription of this._elementSetSubscriptions.entries()) {
-            if (subscription[0] === versionId) {
-                subscription[1].complete();
-                this._elementSetSubscriptions.delete(versionId);
-            }
-        }
     }
 }

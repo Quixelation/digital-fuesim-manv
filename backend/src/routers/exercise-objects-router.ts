@@ -24,7 +24,7 @@ export function createExerciseObjectsRouter(
 
     router.get('/my', async (req, res) => {
         const result =
-            await exerciseElementSetService.getExerciseElementSetsForUser(
+            await exerciseElementSetService.getLatestExerciseElementSetsForUser(
                 req.session!.user.id
             );
 
@@ -74,12 +74,12 @@ export function createExerciseObjectsRouter(
 
     router.get('/:exerciseElementSetId', async (req, res) => {
         const exerciseElementSetId = req.params.exerciseElementSetId;
-        if (!Marketplace.Set.isSetVersionId(exerciseElementSetId)) {
+        if (!Marketplace.Set.isSetEntityId(exerciseElementSetId)) {
             throw new Error('Invalid exercise element set version id');
         }
 
         const result =
-            await exerciseElementSetService.getExerciseElementSetByVersionId(
+            await exerciseElementSetService.getLatestExerciseElementSetById(
                 exerciseElementSetId
             );
         if (!result) {
@@ -102,20 +102,18 @@ export function createExerciseObjectsRouter(
         );
     });
 
-    router.post('/:exerciseElementSetId/create', async (req, res) => {
-        console.log(req.body);
-        console.log(req.params.exerciseElementSetId);
+    router.post('/:setEntityId/create', async (req, res) => {
+        const { setEntityId } = req.params;
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set version id');
+        }
 
         const parsedBody = Marketplace.Element.Create.requestSchema.parse(
             req.body
         );
 
-        if (!Marketplace.Set.isSetVersionId(req.params.exerciseElementSetId)) {
-            throw new Error('Invalid exercise element set version id');
-        }
-
         const data = await exerciseElementSetService.createExerciseObject(
-            req.params.exerciseElementSetId,
+            setEntityId,
             parsedBody.data
         );
 
@@ -125,26 +123,28 @@ export function createExerciseObjectsRouter(
 
         res.send(
             Marketplace.Element.Create.responseSchema.encode({
+                newSetVersionId: data.newSetVersionId,
                 result: {
-                    content: data.content,
-                    createdAt: data.createdAt.toISOString(),
-                    entityId: data?.entityId,
-                    stateVersion: data?.stateVersion,
-                    title: data?.title,
-                    version: data.version,
-                    versionId: data?.versionId,
+                    content: data.result.content,
+                    createdAt: data.result.createdAt.toISOString(),
+                    entityId: data.result.entityId,
+                    stateVersion: data.result.stateVersion,
+                    title: data.result.title,
+                    version: data.result.version,
+                    versionId: data.result.versionId,
                 },
             })
         );
     });
 
-    router.get('/:exerciseElementSetId/latest', async (req, res) => {
-        if (!Marketplace.Set.isSetVersionId(req.params.exerciseElementSetId)) {
-            throw new Error('Invalid exercise element set version id');
+    router.get('/:setEntityId/latest', async (req, res) => {
+        const { setEntityId } = req.params;
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set entity id');
         }
         const data =
             await exerciseElementSetService.getLatestExerciseElementsForSet(
-                req.params.exerciseElementSetId
+                setEntityId
             );
 
         return res.send(
@@ -164,75 +164,123 @@ export function createExerciseObjectsRouter(
         );
     });
 
+    router.post('/:setEntityId/change-visibility', async (req, res) => {
+        const { setEntityId } = req.params;
+
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set entity id');
+        }
+
+        const parsedBody = Marketplace.Set.ChangeVisibility.requestSchema.parse(
+            req.body
+        );
+
+        const data = await exerciseElementSetService.changeSetVisbility(
+            setEntityId,
+            parsedBody.visibility
+        );
+
+        res.send(
+            Marketplace.Set.ChangeVisibility.responseSchema.encode({
+                status: 'success',
+            })
+        );
+    });
+
     router.post(
-        '/:exerciseElementSetId/change-visibility',
+        '/:setEntityId/version/:setVersionId/duplicate',
         async (req, res) => {
-            if (
-                !Marketplace.Set.isSetVersionId(req.params.exerciseElementSetId)
-            ) {
+            const { setVersionId } = req.params;
+            if (!Marketplace.Set.isSetVersionId(setVersionId)) {
                 throw new Error('Invalid exercise element set version id');
             }
 
-            const parsedBody =
-                Marketplace.Set.ChangeVisibility.requestSchema.parse(req.body);
-
-            const data = await exerciseElementSetService.changeSetVisbility(
-                req.params.exerciseElementSetId,
-                parsedBody.visibility
-            );
+            const createdSet =
+                await exerciseElementSetService.duplicateExerciseElementSetVersion(
+                    setVersionId,
+                    'test-owner'
+                );
 
             res.send(
-                Marketplace.Set.ChangeVisibility.responseSchema.encode({
-                    status: 'success',
+                Marketplace.Set.Duplicate.responseSchema.encode({
+                    createdSet: {
+                        versionId: createdSet.versionId,
+                        version: createdSet.version,
+                        entityId: createdSet.entityId,
+                        stateVersion: createdSet.stateVersion,
+                        createdAt: createdSet.createdAt.toISOString(),
+                        title: createdSet.title,
+                        owner: createdSet.owner,
+                        visibility: createdSet.visibility,
+                    },
                 })
             );
         }
     );
 
-    router.post('/:exerciseElementSetId/duplicate', async (req, res) => {
-        if (!Marketplace.Set.isSetVersionId(req.params.exerciseElementSetId)) {
+    router.delete('/:setEntityId/entity', async (req, res) => {
+        const setEntityId = req.params.setEntityId;
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
             throw new Error('Invalid exercise element set version id');
         }
+        await exerciseElementSetService.deleteExerciseElementSet(setEntityId);
+        res.sendStatus(204);
+    });
 
-        const createdSet =
-            await exerciseElementSetService.duplicateExerciseElementSet(
-                req.params.exerciseElementSetId,
-                'test-owner'
+    router.put('/:setEntityId/entity/:elementEntityId', async (req, res) => {
+        const { elementEntityId } = req.params;
+        if (!Marketplace.Element.isEntityId(elementEntityId)) {
+            throw new Error('Invalid exercise element object entity id');
+        }
+
+        const parsedBody = Marketplace.Element.Edit.requestSchema.parse(
+            req.body
+        );
+
+        const data =
+            await exerciseElementSetService.updateExerciseElementObject(
+                elementEntityId,
+                parsedBody.data
             );
 
+        if (!data) {
+            throw new Error('Failed to update exercise element object');
+        }
+
         res.send(
-            Marketplace.Set.Duplicate.responseSchema.encode({
-                createdSet: {
-                    versionId: createdSet.versionId,
-                    version: createdSet.version,
-                    entityId: createdSet.entityId,
-                    stateVersion: createdSet.stateVersion,
-                    createdAt: createdSet.createdAt.toISOString(),
-                    title: createdSet.title,
-                    owner: createdSet.owner,
-                    visibility: createdSet.visibility,
+            Marketplace.Element.Edit.responseSchema.encode({
+                newSetVersionId: data.newSetVersionId,
+                result: {
+                    entityId: data.newElement.entityId,
+                    versionId: data.newElement.versionId,
+                    version: data.newElement.version,
+                    stateVersion: data.newElement.stateVersion,
+                    createdAt: data.newElement.createdAt.toISOString(),
+                    title: data.newElement.title,
+                    content: data.newElement.content,
                 },
             })
         );
     });
 
-    router.delete('/:exerciseElementSetId/entity', async (req, res) => {
-        if (!Marketplace.Set.isSetVersionId(req.params.exerciseElementSetId)) {
-            throw new Error('Invalid exercise element set version id');
-        }
-        await exerciseElementSetService.deleteExerciseElementSet(req.params.exerciseElementSetId);
-        res.sendStatus(204);
-    })
-
-    router.delete('/object/:entityId', async (req, res) => {
-        if (!Marketplace.Element.isEntityId(req.params.entityId)) {
+    router.delete('/:setEntityId/entity/:elementEntityId', async (req, res) => {
+        const { setEntityId, elementEntityId } = req.params;
+        if (!Marketplace.Element.isEntityId(elementEntityId)) {
             throw new Error('Invalid exercise element object entity id');
         }
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set entity id');
+        }
 
-        await exerciseElementSetService.deleteExerciseElementObject(
-            req.params.entityId
+        const newSetVersion =
+            await exerciseElementSetService.deleteExerciseElementObjectFromSet(
+                elementEntityId
+            );
+        return res.send(
+            Marketplace.Element.Delete.responseSchema.encode({
+                newSetVersionId: newSetVersion.versionId,
+            })
         );
-        return res.sendStatus(204);
     });
 
     router.get('/object/:entityId/versions', async (req, res) => {
@@ -256,39 +304,6 @@ export function createExerciseObjectsRouter(
                     version: element.version,
                     versionId: element.versionId,
                 })),
-            })
-        );
-    });
-
-    router.put('/object/:entityId', async (req, res) => {
-        if (!Marketplace.Element.isEntityId(req.params.entityId)) {
-            throw new Error('Invalid exercise element object entity id');
-        }
-        const parsedBody = Marketplace.Element.Edit.requestSchema.parse(
-            req.body
-        );
-        const data =
-            await exerciseElementSetService.updateExerciseElementObject(
-                req.params.entityId,
-                parsedBody.data
-            );
-
-        if (!data) {
-            throw new Error('Failed to update exercise element object');
-        }
-
-        res.send(
-            Marketplace.Element.Edit.responseSchema.encode({
-                newSetVersionId: data.newSetVersionId,
-                result: {
-                    entityId: data.newElement.entityId,
-                    versionId: data.newElement.versionId,
-                    version: data.newElement.version,
-                    stateVersion: data.newElement.stateVersion,
-                    createdAt: data.newElement.createdAt.toISOString(),
-                    title: data.newElement.title,
-                    content: data.newElement.content,
-                },
             })
         );
     });

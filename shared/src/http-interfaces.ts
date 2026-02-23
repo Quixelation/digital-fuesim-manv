@@ -123,45 +123,6 @@ export type JoinExerciseResponseDataInput = z.input<
 
 // ###### Exercise Element Set ######
 
-export const exerciseElementObjectUnionSchema = z.union([
-    vehicleTemplateSchema,
-]);
-
-export type ExerciseElementObjectUnion = z.infer<
-    typeof exerciseElementObjectUnionSchema
->;
-
-export const elementSetVisbilitySchema = z.enum(['private', 'public']);
-
-export type ElementSetVisibility = z.infer<typeof elementSetVisbilitySchema>;
-
-const stateVersionedEntitySchema = z.object({
-    versionId: z.string(),
-    version: z.number(),
-    entityId: z.string(),
-    stateVersion: z.number(),
-    createdAt: z.string(),
-});
-
-export const exerciseElementSetDtoSchema = z.object({
-    ...stateVersionedEntitySchema.shape,
-    title: z.string(),
-    visibility: elementSetVisbilitySchema,
-    owner: z.string(),
-});
-
-export type ExerciseElementSetDto = z.infer<typeof exerciseElementSetDtoSchema>;
-
-export const exerciseElementObjectDtoSchema = z.object({
-    ...stateVersionedEntitySchema.shape,
-    title: z.string(),
-    content: exerciseElementObjectUnionSchema,
-});
-
-export type ExerciseElementObjectDto = z.infer<
-    typeof exerciseElementObjectDtoSchema
->;
-
 class Route<TRequest = never, TResponse = never> {
     constructor(opts: { request?: TRequest; response?: TResponse }) {
         this.requestSchema = opts.request as TRequest;
@@ -179,6 +140,28 @@ class Route<TRequest = never, TResponse = never> {
 }
 
 export namespace Marketplace {
+    export const exerciseElementObjectUnionSchema = z.union([
+        vehicleTemplateSchema,
+    ]);
+
+    export type ExerciseElementObjectUnion = z.infer<
+        typeof exerciseElementObjectUnionSchema
+    >;
+
+    export const elementSetVisbilitySchema = z.enum(['private', 'public']);
+
+    export type ElementSetVisibility = z.infer<
+        typeof elementSetVisbilitySchema
+    >;
+
+    // WARNING: This does not include versionId and entityId, since those have specific drizzle schemas
+    const stateVersionedEntitySchema = z.object({
+        version: z.number(),
+        stateVersion: z.number(),
+        createdAt: z.string(),
+    });
+
+    // set needs to be split up for internal deps
     export namespace Set {
         export const versionIdSchema = z
             .string()
@@ -194,34 +177,111 @@ export namespace Marketplace {
             .regex(/^set_entity_.+$/u)
             .brand<'SetEntityId'>();
         export type EntityId = z.infer<typeof entityIdSchema>;
-        export const isSetEntityId = (value: string): value is EntityId => {
+        export const isSetEntityId = (
+            value: string | null
+        ): value is EntityId => {
             return entityIdSchema.safeParse(value).success;
         };
 
+        export const dtoSchema = z.object({
+            ...stateVersionedEntitySchema.shape,
+            versionId: Set.versionIdSchema,
+            entityId: Set.entityIdSchema,
+            title: z.string(),
+            visibility: elementSetVisbilitySchema,
+            owner: z.string(),
+        });
+
+        export type Dto = z.infer<typeof dtoSchema>;
+    }
+
+    export namespace Element {
+        export const versionIdSchema = z
+            .string()
+            .regex(/^element_version_.+$/u)
+            .brand<'ElementVersionId'>();
+        export type VersionId = z.infer<typeof versionIdSchema>;
+        export const isVersionId = (value: string): value is VersionId => {
+            return versionIdSchema.safeParse(value).success;
+        };
+
+        export const entityIdSchema = z
+            .string()
+            .regex(/^element_entity_.+$/u)
+            .brand<'ElementEntityId'>();
+        export type EntityId = z.infer<typeof entityIdSchema>;
+        export const isEntityId = (value: string | null): value is EntityId => {
+            return entityIdSchema.safeParse(value).success;
+        };
+
+        export const dtoSchema = z.object({
+            ...stateVersionedEntitySchema.shape,
+            versionId: Element.versionIdSchema,
+            entityId: Element.entityIdSchema,
+            title: z.string(),
+            content: exerciseElementObjectUnionSchema,
+        });
+
+        export type Dto = z.infer<typeof dtoSchema>;
+
+        export const Create = new Route({
+            request: z.object({
+                data: exerciseElementObjectUnionSchema,
+            }),
+            response: z.object({
+                newSetVersionId: Set.versionIdSchema,
+                result: dtoSchema,
+            }),
+        });
+
+        export const Edit = new Route({
+            request: z.object({
+                data: exerciseElementObjectUnionSchema,
+            }),
+            response: z.object({
+                newSetVersionId: Set.versionIdSchema,
+                result: dtoSchema,
+            }),
+        });
+
+        export const Delete = new Route({
+            response: z.object({
+                newSetVersionId: Set.versionIdSchema,
+            }),
+        });
+
+        export const GetByEntityId = new Route({
+            response: z.object({
+                result: z.array(dtoSchema),
+            }),
+        });
+    }
+
+    export namespace Set {
         export const Create = new Route({
             request: z.object({
                 title: z.string().trim().nonempty(),
             }),
             response: z.object({
-                result: exerciseElementSetDtoSchema,
+                result: dtoSchema,
             }),
         });
 
         export const LoadMy = new Route({
             response: z.object({
-                result: z.array(exerciseElementSetDtoSchema),
+                result: z.array(dtoSchema),
             }),
         });
 
         export const GetByVersionId = new Route({
             response: z.object({
-                result: exerciseElementSetDtoSchema,
+                result: dtoSchema,
             }),
         });
 
         export const GetLatestElementsBySetVersionId = new Route({
             response: z.object({
-                result: z.array(exerciseElementObjectDtoSchema),
+                result: z.array(Element.dtoSchema),
             }),
         });
 
@@ -236,52 +296,7 @@ export namespace Marketplace {
 
         export const Duplicate = new Route({
             response: z.object({
-                createdSet: exerciseElementSetDtoSchema,
-            }),
-        });
-    }
-
-    export namespace Element {
-        export const versionIdSchema = z
-            .string()
-            .regex(/^element_version_.+$/u)
-            .brand<'ElementVersionId'>();
-        export type VersionId = z.infer<typeof versionIdSchema>;
-        export const isVerionId = (value: string): value is VersionId => {
-            return versionIdSchema.safeParse(value).success;
-        };
-
-        export const entityIdSchema = z
-            .string()
-            .regex(/^element_entity_.+$/u)
-            .brand<'ElementEntityId'>();
-        export type EntityId = z.infer<typeof entityIdSchema>;
-        export const isEntityId = (value: string): value is EntityId => {
-            return entityIdSchema.safeParse(value).success;
-        };
-
-        export const Create = new Route({
-            request: z.object({
-                data: exerciseElementObjectUnionSchema,
-            }),
-            response: z.object({
-                result: exerciseElementObjectDtoSchema,
-            }),
-        });
-
-        export const Edit = new Route({
-            request: z.object({
-                data: exerciseElementObjectUnionSchema,
-            }),
-            response: z.object({
-                newSetVersionId: z.string(),
-                result: exerciseElementObjectDtoSchema,
-            }),
-        });
-
-        export const GetByEntityId = new Route({
-            response: z.object({
-                result: z.array(exerciseElementObjectDtoSchema),
+                createdSet: dtoSchema,
             }),
         });
     }

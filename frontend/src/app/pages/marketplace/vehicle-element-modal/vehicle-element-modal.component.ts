@@ -6,7 +6,6 @@ import {
     OnInit,
     signal,
 } from '@angular/core';
-import { ExerciseElementObjectDto, uuid } from 'fuesim-digital-shared';
 import {
     ChangedVehicleTemplateValues,
     EditableVehicleTemplateValues,
@@ -14,6 +13,7 @@ import {
 import { ExerciseElementService } from '../../../core/exercise-element.service';
 import { vehicleTemplateSchema } from '../../../../../../shared/dist/models/vehicle-template';
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
+import { Marketplace } from 'fuesim-digital-shared';
 
 @Component({
     selector: 'app-vehicle-element-modal',
@@ -25,9 +25,9 @@ export class VehicleElementModalComponent implements OnInit {
     private readonly exerciseService = inject(ExerciseElementService);
     private readonly activeModal = inject(NgbActiveModal);
 
-    public readonly elementSetId: string = '';
+    public readonly elementSetId: Marketplace.Set.EntityId | null = null;
     public readonly isEditMode = false;
-    public readonly entityId: string | null = null;
+    public readonly entityId: Marketplace.Element.EntityId | null = null;
     public readonly currentVersion: number | null = null;
     public readonly selectedVersion = signal<number | null>(null);
     public readonly selectedVehicleVersionData = computed(() => {
@@ -41,12 +41,20 @@ export class VehicleElementModalComponent implements OnInit {
         | ((values: ChangedVehicleTemplateValues) => Promise<void>)
         | null = null;
 
-    public readonly versionHistory = signal<ExerciseElementObjectDto[] | null>(
+    public readonly versionHistory = signal<Marketplace.Element.Dto[] | null>(
         null
     );
 
     public async ngOnInit() {
-        console.log(this.entityId);
+        if (
+            this.entityId !== null &&
+            !Marketplace.Element.isEntityId(this.entityId)
+        ) {
+            console.error('Invalid entityId', this.entityId);
+            this.close();
+            return;
+        }
+
         if (this.isEditMode && this.entityId) {
             const versionData =
                 await this.exerciseService.getElementObjectVersions(
