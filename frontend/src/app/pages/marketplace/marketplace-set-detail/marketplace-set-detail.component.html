@@ -1,6 +1,6 @@
-@if (selectedSetData() !== null) {
+@if (selectedSetData(); as setData) {
     <div class="d-flex flex-row justify-content-between container w-100">
-        <h2>{{ selectedSetData()!.setData.title }}</h2>
+        <h2>{{ setData.collection.title }}</h2>
 
         <div class="d-flex flex-row gap-2 align-items-center">
             <button
@@ -17,7 +17,37 @@
             >
                 <i class="bi bi-copy"></i>
             </button>
-            @if (selectedSetData()!.setData.visibility === 'private') {
+
+            <div ngbDropdown>
+                <button
+                    type="button"
+                    class="btn btn-outline-primary d-flex flex-row align-items-center"
+                    ngbDropdownToggle
+                >
+                    <i class="bi bi-box-arrow-in-down-right me-2"></i>
+                    <span>Importieren</span>
+                </button>
+                <div ngbDropdownMenu>
+                    @for (
+                        availableCollection of availableCollections();
+                        track availableCollection.versionId
+                    ) {
+                        @if (availableCollection.entityId !== _setEntityId) {
+                            <button
+                                ngbDropdownItem
+                                (click)="
+                                    importFromCollection(
+                                        availableCollection.versionId
+                                    )
+                                "
+                            >
+                                {{ availableCollection.title }}
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+            @if (setData.collection.visibility === 'private') {
                 <button
                     type="button"
                     class="btn btn-outline-primary"
@@ -38,10 +68,31 @@
     >
         <div class="d-flex flex-row gap-2 align-items-center">
             <span class="text-muted">
-            Version {{selectedSetData()!.setData.version}} &middot; Erstellungsdatum: {{selectedSetData()!.setData.createdAt | localeDate}} &middot; 5
+                Version {{ setData.collection.version }} &middot;
+                Erstellungsdatum:
+                {{ setData.collection.createdAt | localeDate }} &middot; 5
                 Einträge
-                </span
-            >
+            </span>
+            <span>
+                {{ setData.collection.draftState }}
+            </span>
+
+            @for (
+                dependency of selectedSetData()!.objects.transitive;
+                track dependency.collection.versionId
+            ) {
+                <span
+                    class="badge bg-secondary"
+                    (click)="
+                        removeCollectionDependency(
+                            dependency.collection.versionId
+                        )
+                    "
+                    style="cursor: pointer"
+                >
+                    {{ dependency.collection.title }}
+                </span>
+            }
         </div>
         <div class="d-flex flex-row gap-2 align-items-center">
             <div ngbDropdown>
@@ -56,6 +107,9 @@
                     <button ngbDropdownItem (click)="createNewVehicle()">
                         Fahrzeug
                     </button>
+                    <button ngbDropdownItem (click)="createNewAlarmgroup()">
+                        Alarmgruppe
+                    </button>
                     <button ngbDropdownItem>Kartenbild</button>
                 </div>
             </div>
@@ -63,10 +117,27 @@
     </div>
 
     <hr />
+    @if (setData.collection.draftState) {
+        <div
+            class="alert alert-primary d-flex flex-row justify-content-between align-items-center gap-3"
+            role="alert"
+        >
+            <span class="d-flex flex-row align-items-center gap-3">
+                <i class="bi bi-info-circle"></i>
+                <span>
+                    Dieses Set enthält ungespeicherte Änderungen. Speichern Sie
+                    das Set, um es in Übungsszenarien verwenden zu können.
+                </span>
+            </span>
+            <button class="btn btn-primary btn-sm" (click)="saveDraftState()">
+                Änderungen speichern
+            </button>
+        </div>
+    }
     <div class="container">
         <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
             @for (
-                exerciseObject of selectedSetData()!.objects;
+                exerciseObject of selectedSetData()!.objects.direct;
                 track exerciseObject.versionId
             ) {
                 @switch (exerciseObject.content.type) {
@@ -82,8 +153,56 @@
                             (elementEdit)="editVehicle(exerciseObject)"
                         />
                     }
+                    @case ('alarmGroup') {
+                        {{ exerciseObject.title }} (Alarmgruppe)
+                    }
                 }
             }
         </div>
+        @for (
+            dependency of selectedSetData()!.objects.transitive;
+            track dependency.collection.versionId
+        ) {
+            <hr />
+            <div
+                class="d-flex flex-row align-items-center justify-content-between gap-2 mb-3"
+            >
+                <h4 class="mb-0">
+                    {{ dependency.collection.title }} (Version
+                    {{ dependency.collection.version }}, draft:
+                    {{ dependency.collection.draftState }})
+                </h4>
+                <button class="btn btn-outline-primary btn-sm">
+                    Version aktualisieren
+                </button>
+            </div>
+            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
+                @for (
+                    exerciseObject of dependency.elements;
+                    track exerciseObject.versionId
+                ) {
+                    @switch (exerciseObject.content.type) {
+                        @case ('vehicleTemplate') {
+                            <app-map-editor-card
+                                [imageUrl]="exerciseObject.content.image.url"
+                                [title]="exerciseObject.title"
+                                [enableDeleteButton]="true"
+                                [enableEditButton]="true"
+                                (elementDelete)="
+                                    deleteExerciseObject(
+                                        exerciseObject.entityId
+                                    )
+                                "
+                                (elementEdit)="editVehicle(exerciseObject)"
+                            />
+                        }
+
+                        @case ('alarmGroup') {
+                            {{ exerciseObject.title }} (Alarmgruppe)
+                        }
+                    }
+                }
+            </div>
+        }
     </div>
 }

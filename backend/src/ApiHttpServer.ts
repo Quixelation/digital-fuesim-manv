@@ -1,30 +1,21 @@
-import type { Server as HttpServer } from 'node:http';
-import cors from 'cors';
-import type { Express } from 'express';
-import express from 'express';
 import cookieParser from 'cookie-parser';
-import { createExerciseRouter } from './routers/exercise-router.js';
-import { createAuthRouter } from './routers/auth-router.js';
+import cors from 'cors';
+import express, { type Express } from 'express';
+import type { Server as HttpServer } from 'http';
+import type { AuthService } from './auth/auth-service.js';
+import { Config } from './config.js';
 import type { ExerciseManagerService } from './database/services/exercise-manager-service.js';
-import type { AuthService, SessionInformation } from './auth/auth-service.js';
+import type { ExerciseService } from './database/services/exercise-service.js';
+import { createAuthRouter } from './routers/auth-http-router.js';
+import { createCollectionsRouter } from './routers/collections-router.js';
+import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
+import { createExerciseRouter } from './routers/exercise-router.js';
+import { healthRouter } from './routers/health-router.js';
 import {
     createSessionMiddleware,
     errorHandler,
 } from './utils/http-handlers.js';
-import type { ExerciseService } from './database/services/exercise-service.js';
-import { Config } from './config.js';
-import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
-import { healthRouter } from './routers/health-router.js';
-import { createCollectionsRouter } from './routers/collections-router.js';
 import { CollectionService } from './database/services/collection-service.js';
-
-declare global {
-    namespace Express {
-        interface Request {
-            session?: SessionInformation;
-        }
-    }
-}
 
 export class ApiHttpServer {
     public readonly httpServer: HttpServer;

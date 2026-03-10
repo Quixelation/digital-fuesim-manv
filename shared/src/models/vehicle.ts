@@ -12,8 +12,10 @@ import type {
     ImageProperties,
     ExerciseOccupation,
 } from './utils/index.js';
+import { versionedElementSchema } from './versioned-elements.js';
 
 export const vehicleSchema = z.strictObject({
+    ...versionedElementSchema.shape,
     id: uuidSchema,
     type: z.literal('vehicle'),
     vehicleType: z.string(),

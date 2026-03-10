@@ -1,0 +1,1 @@
+ALTER TABLE "collection_dependency_mapping" DROP CONSTRAINT "unique_collection_dependency_2";

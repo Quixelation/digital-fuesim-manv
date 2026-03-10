@@ -22,6 +22,8 @@ import {
     text,
     pgView,
     pgEnum,
+    boolean,
+    check,
 } from 'drizzle-orm/pg-core';
 
 const typedUUID = <T = string>() => uuid().$type<T>();
@@ -181,6 +183,7 @@ export const exerciseElementSetTable = pgTable(
         description: varchar().notNull(),
         visibility: setVisibilityEnum().notNull().default('private'),
         owner: varchar().notNull(),
+        draftState: boolean().notNull(),
     },
     (table) => [
         unique('unique_set_version').on(table.entityId, table.version),
@@ -191,15 +194,19 @@ export const exerciseElementSetTable = pgTable(
 export const elementTemplateToSetMappingTable = pgTable(
     'exercise_element_to_set_mapping',
     {
-        setEntityId: varchar().notNull(),
+        setEntityId: varchar().notNull().$type<Marketplace.Set.EntityId>(),
         setVersionId: varchar()
             .notNull()
+            .$type<Marketplace.Set.VersionId>()
             .references(() => exerciseElementSetTable.versionId, {
                 onDelete: 'cascade',
             }),
-        elementEntityId: varchar().notNull(),
+        elementEntityId: varchar()
+            .notNull()
+            .$type<Marketplace.Element.EntityId>(),
         elementVersionId: varchar()
             .notNull()
+            .$type<Marketplace.Element.VersionId>()
             .references(() => exerciseElementTemplateTable.versionId, {
                 onDelete: 'cascade',
             }),
@@ -212,6 +219,36 @@ export const elementTemplateToSetMappingTable = pgTable(
         unique('unique_element_set_mapping_2').on(
             table.setVersionId,
             table.elementEntityId
+        ),
+    ]
+);
+
+export const collectionDependencyMappingTable = pgTable(
+    'collection_dependency_mapping',
+    {
+        collectionEntityId: varchar()
+            .notNull()
+            .$type<Marketplace.Set.EntityId>(),
+        collectionVersionId: varchar()
+            .notNull()
+            .$type<Marketplace.Set.VersionId>()
+            .references(() => exerciseElementSetTable.versionId, {
+                onDelete: 'cascade',
+            }),
+        dependentCollectionEntityId: varchar()
+            .notNull()
+            .$type<Marketplace.Set.EntityId>(),
+        dependentCollectionVersionId: varchar()
+            .notNull()
+            .$type<Marketplace.Set.VersionId>()
+            .references(() => exerciseElementSetTable.versionId, {
+                onDelete: 'cascade',
+            }),
+    },
+    (table) => [
+        unique('unique_collection_dependency').on(
+            table.collectionVersionId,
+            table.dependentCollectionVersionId
         ),
     ]
 );
@@ -268,40 +305,6 @@ export const latestExerciseElementTemplateView = pgView(
                 )
             )
         )
-);
-
-export const latestSetVersionNumbersView = pgView(
-    'latest_exercise_element_set_version_numbers'
-).as((qb) =>
-    qb
-        .select({
-            entityId: exerciseElementSetTable.entityId,
-            latestversion: max(exerciseElementSetTable.version).as(
-                'latestversion'
-            ),
-        })
-        .from(exerciseElementSetTable)
-        .groupBy(exerciseElementSetTable.entityId)
-);
-
-export const latestElementSetView = pgView('latest_exercise_element_sets').as(
-    (qb) =>
-        qb
-            .select(getTableColumns(exerciseElementSetTable))
-            .from(exerciseElementSetTable)
-            .innerJoin(
-                latestSetVersionNumbersView,
-                and(
-                    eq(
-                        exerciseElementSetTable.entityId,
-                        latestSetVersionNumbersView.entityId
-                    ),
-                    eq(
-                        exerciseElementSetTable.version,
-                        latestSetVersionNumbersView.latestversion
-                    )
-                )
-            )
 );
 
 export const actionEntityRelations = relations(actionTable, ({ one }) => ({

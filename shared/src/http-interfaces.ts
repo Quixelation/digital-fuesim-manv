@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { participantKeySchema, trainerKeySchema } from './exercise-keys.js';
 import { exerciseTemplateIdSchema } from './ids.js';
 import { vehicleTemplateSchema } from './models/vehicle-template.js';
+import { AlarmGroup } from './models/alarm-group.js';
 
 export const exerciseKeysSchema = z.object({
     participantKey: participantKeySchema,
@@ -142,11 +143,27 @@ class Route<TRequest = never, TResponse = never> {
 export namespace Marketplace {
     export const exerciseElementObjectUnionSchema = z.union([
         vehicleTemplateSchema,
+        //TODO: Quixelation
+        z.object({
+            type: z.literal('alarmGroup'),
+            id: z.string(),
+            name: z.string(),
+            triggerLimit: z.number().nullable(),
+            alarmGroupVehicles: z.record(
+                z.string(),
+                z.object({
+                    name: z.string(),
+                    vehicleTemplateId: z.string(),
+                    time: z.number(),
+                })
+            ),
+            triggerCount: z.number(),
+        }),
     ]);
 
-    export type ExerciseElementObjectUnion = z.infer<
-        typeof exerciseElementObjectUnionSchema
-    >;
+    export type ExerciseElementObjectUnion =
+        | z.infer<typeof exerciseElementObjectUnionSchema>
+        | AlarmGroup;
 
     export const elementSetVisbilitySchema = z.enum(['private', 'public']);
 
@@ -190,6 +207,7 @@ export namespace Marketplace {
             title: z.string(),
             visibility: elementSetVisbilitySchema,
             owner: z.string(),
+            draftState: z.boolean(),
         });
 
         export type Dto = z.infer<typeof dtoSchema>;
@@ -223,6 +241,9 @@ export namespace Marketplace {
         });
 
         export type Dto = z.infer<typeof dtoSchema>;
+        export type TypedDto<TContent> = Omit<Dto, 'content'> & {
+            content: TContent;
+        };
 
         export const Create = new Route({
             request: z.object({
@@ -279,9 +300,15 @@ export namespace Marketplace {
             }),
         });
 
+        export const transitiveCollectionSchema = z.object({
+            collection: dtoSchema,
+            elements: z.array(Element.dtoSchema),
+        });
+
         export const GetLatestElementsBySetVersionId = new Route({
             response: z.object({
-                result: z.array(Element.dtoSchema),
+                direct: z.array(Element.dtoSchema),
+                transitive: z.array(transitiveCollectionSchema),
             }),
         });
 
@@ -299,5 +326,65 @@ export namespace Marketplace {
                 createdSet: dtoSchema,
             }),
         });
+
+        export const Import = new Route({
+            response: z.object({
+                importedSet: transitiveCollectionSchema,
+            }),
+        });
+
+        export const SaveDraftState = new Route({
+            response: z.object({
+                result: dtoSchema,
+            }),
+        });
+
+        export namespace Events {
+            export const initialDataSchema = z.object({
+                data: z.object({
+                    collection: Set.dtoSchema,
+                    elements: z.object({
+                        direct: z.array(Element.dtoSchema),
+                        transitive: z.array(transitiveCollectionSchema),
+                    }),
+                }),
+            });
+
+            export type InitialData = z.infer<typeof initialDataSchema>;
+
+            export const dependencyAddSchema = z.object({
+                data: z.array(transitiveCollectionSchema),
+            });
+
+            export type DependencyAdd = z.infer<typeof dependencyAddSchema>;
+
+            export const elementCreateSchema = z.object({
+                data: Element.dtoSchema,
+            });
+
+            export type ElementCreate = z.infer<typeof elementCreateSchema>;
+
+            export const elementUpdateSchema = z.object({
+                data: Element.dtoSchema,
+            });
+
+            export type ElementUpdate = z.infer<typeof elementUpdateSchema>;
+
+            export const collectionUpdateSchema = z.object({
+                data: Set.dtoSchema,
+            });
+
+            export type CollectionUpdate = z.infer<
+                typeof collectionUpdateSchema
+            >;
+
+            export const versionSwitchSchema = z.object({
+                data: z.object({
+                    newVersionId: Set.versionIdSchema,
+                }),
+            });
+
+            export type VersionSwitch = z.infer<typeof versionSwitchSchema>;
+        }
     }
 }

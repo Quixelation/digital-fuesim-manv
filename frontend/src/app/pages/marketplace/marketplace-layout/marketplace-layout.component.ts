@@ -1,5 +1,5 @@
 import { Component, inject, OnDestroy, signal } from '@angular/core';
-import { ExerciseElementService } from '../../../core/exercise-element.service';
+import { CollectionService } from '../../../core/exercise-element.service';
 import { Marketplace } from 'fuesim-digital-shared';
 import { ActivatedRoute, Event, NavigationEnd, Router } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
@@ -11,7 +11,7 @@ import { Subject, takeUntil } from 'rxjs';
     styleUrl: './marketplace-layout.component.scss',
 })
 export class MarketplaceLayoutComponent implements OnDestroy {
-    private readonly exerciseElementService = inject(ExerciseElementService);
+    private readonly collectionService = inject(CollectionService);
     private readonly router = inject(Router);
 
     private readonly destroy$ = new Subject<void>();
@@ -20,7 +20,7 @@ export class MarketplaceLayoutComponent implements OnDestroy {
         signal<Marketplace.Set.EntityId | null>(null);
 
     public constructor() {
-        this.exerciseElementService.loadElementSets();
+        this.collectionService.loadCollections();
         this.router.events
             .pipe(takeUntil(this.destroy$))
             .subscribe((event: Event) => {
@@ -53,14 +53,14 @@ export class MarketplaceLayoutComponent implements OnDestroy {
     }
 
     public get elementSets() {
-        return this.exerciseElementService.elementSets();
+        return this.collectionService.elementSets();
     }
 
     public async createNewExercise() {
         //TODO: @Quixelation
         const exerciseSetName = prompt('Name of the new exercise set');
 
-        await this.exerciseElementService.createElementSet(
+        await this.collectionService.createColletion(
             exerciseSetName ?? 'New Exercise Set'
         );
     }

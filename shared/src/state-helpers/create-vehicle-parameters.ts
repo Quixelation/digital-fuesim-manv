@@ -5,6 +5,7 @@ import type {
     PersonnelTemplate,
     MapCoordinates,
     VehicleParameters,
+    VersionedElementPartial,
 } from '../models/index.js';
 import {
     newVehicleParameters,
@@ -27,7 +28,8 @@ export function createVehicleParameters(
     vehicleTemplate: VehicleTemplate,
     materialTemplates: { readonly [key in UUID]: MaterialTemplate },
     personnelTemplates: { readonly [key in UUID]: PersonnelTemplate },
-    vehiclePosition: MapCoordinates
+    vehiclePosition: MapCoordinates,
+    entityVersion?: VersionedElementPartial
 ): VehicleParameters {
     const materials = vehicleTemplate.materialTemplateIds
         .map((materialTemplateId: UUID) => {
@@ -55,6 +57,8 @@ export function createVehicleParameters(
         .filter((val) => val !== null);
 
     const vehicle: Vehicle = {
+        entityId: entityVersion?.entityId,
+        versionId: entityVersion?.versionId,
         id: vehicleId,
         type: 'vehicle',
         templateId: vehicleTemplate.id,

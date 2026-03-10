@@ -28,6 +28,8 @@ import { SessionRepository } from '../database/repositories/session-repository.j
 import { ExerciseManagerService } from '../database/services/exercise-manager-service.js';
 import type { OidcService } from '../auth/oidc-service.js';
 import type { SocketReservedEvents } from './socket-reserved-events.js';
+import { CollectionService } from '../src/database/services/collection-service.js';
+import { CollectionRepository } from '../src/database/repositories/collection-repository.js';
 
 // Some helper types
 /**
@@ -122,10 +124,12 @@ export class TestEnvironment {
     public server!: FuesimServer;
     private _databaseService!: DatabaseService;
     private _exerciseService!: ExerciseService;
+    private _collectionService!: CollectionService;
     private _exerciseRepository!: ExerciseRepository;
     private _actionRepository!: ActionRepository;
     private _authService!: AuthService;
     private _exerciseManagerService!: ExerciseManagerService;
+    private _collectionRepository!: CollectionRepository;
 
     public get databaseService(): DatabaseService {
         return this._databaseService;
@@ -140,6 +144,10 @@ export class TestEnvironment {
 
     public get exerciseManagerService() {
         return this._exerciseManagerService;
+    }
+
+    public get collectionService() {
+        return this._collectionService;
     }
 
     public get exerciseRepository(): ExerciseRepository {
@@ -199,19 +207,24 @@ export class TestEnvironment {
         exerciseRepository: ExerciseRepository,
         actionRepository: ActionRepository,
         authService: AuthService,
-        exerciseManagerService: ExerciseManagerService
+        exerciseManagerService: ExerciseManagerService,
+        collectionService: CollectionService,
+        collectionRepository: CollectionRepository
     ) {
         this._databaseService = databaseService;
         this._exerciseService = exerciseService;
         this._authService = authService;
         this._exerciseManagerService = exerciseManagerService;
+        this._collectionService = collectionService;
         this._exerciseRepository = exerciseRepository;
         this._actionRepository = actionRepository;
+        this._collectionRepository = collectionRepository;
         this.server = new FuesimServer(
             this.databaseService,
             exerciseService,
             authService,
-            exerciseManagerService
+            exerciseManagerService,
+            collectionService
         );
     }
 }
@@ -227,6 +240,8 @@ export const createTestEnvironment = (): TestEnvironment => {
     let actionRepository: ActionRepository;
     let userRepository: UserRepository;
     let sessionRepository: SessionRepository;
+    let collectionService: CollectionService;
+    let collectionRepository: CollectionRepository;
 
     // If this gets too slow, we may look into creating the server only once
     beforeEach(async () => {
@@ -253,13 +268,20 @@ export const createTestEnvironment = (): TestEnvironment => {
             exerciseRepository,
             actionRepository
         );
+        collectionRepository = new CollectionRepository(
+            databaseService.databaseConnection
+        );
+        collectionService = new CollectionService(collectionRepository);
+
         environment.init(
             databaseService,
             exerciseService,
             exerciseRepository,
             actionRepository,
             authService,
-            exerciseManagerService
+            exerciseManagerService,
+            collectionService,
+            collectionRepository
         );
     });
     afterEach(async () => {

@@ -49,7 +49,10 @@ export abstract class BaseRepository {
         return new RepositoryClass(newConnection);
     }
 
-    protected onlySingle<T>(array: T[]): T | null {
+    protected onlySingle<T>(array: T[] | null): T | null {
+        if (array === null) {
+            return null;
+        }
         if (array.length === 0 || array[0] === undefined) {
             return null;
         }
@@ -59,11 +62,18 @@ export abstract class BaseRepository {
         return array[0];
     }
 
-    protected onlySingleStrict<T>(array: T[]): T {
+    protected onlySingleStrict<T>(array: T[] | null): T {
         const result = this.onlySingle(array);
         if (result === null) {
             throw new Error('No entries found where one expected');
         }
         return result;
+    }
+
+    protected strict<T>(element: T | null): T {
+        if (element === null) {
+            throw new Error('No entry found where one expected');
+        }
+        return element;
     }
 }

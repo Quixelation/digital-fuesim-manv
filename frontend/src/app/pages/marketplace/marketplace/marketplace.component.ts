@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { ExerciseElementService } from '../../../core/exercise-element.service';
+import { CollectionService } from '../../../core/exercise-element.service';
 
 @Component({
     selector: 'app-marketplace',

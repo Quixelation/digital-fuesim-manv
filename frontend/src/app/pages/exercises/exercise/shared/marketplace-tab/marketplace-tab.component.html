@@ -1,0 +1,43 @@
+<div ngbDropdown placement="top-end" class="d-inline-block">
+    <button type="button" class="btn btn-outline-primary" ngbDropdownToggle>
+        @if (selectedCollection(); as selectedCollection) {
+            {{ selectedCollection.title }}
+        } @else {
+            Sammlung auswählen
+        }
+    </button>
+    <div ngbDropdownMenu aria-labelledby="dropdownBasic2">
+        @for (
+            availableCollection of availableCollections();
+            track availableCollection.versionId
+        ) {
+            <button
+                ngbDropdownItem
+                (click)="selectCollection(availableCollection)"
+            >
+                {{ availableCollection.title }}
+            </button>
+        }
+    </div>
+
+    @for (element of elementsOfSelectedCollection(); track element.versionId) {
+        @if (element.content.type === 'vehicleTemplate') {
+            <app-map-editor-card
+                (elementMousedown)="
+                dragElementService.onMouseDown(
+                $event,
+                {
+                type: 'vehicle',
+                template: element.content,
+                }
+                )
+                "
+                [title]="element.content.name"
+                [imageUrl]="element.content.image.url"
+            />
+        } @else {
+            <app-map-editor-card
+        [title]="element.content.name" />
+        }
+    }
+</div>
