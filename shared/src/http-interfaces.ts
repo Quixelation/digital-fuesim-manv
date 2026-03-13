@@ -294,7 +294,7 @@ export namespace Marketplace {
             }),
         });
 
-        export const GetByVersionId = new Route({
+        export const GetByEntityId = new Route({
             response: z.object({
                 result: dtoSchema,
             }),
@@ -309,6 +309,12 @@ export namespace Marketplace {
             response: z.object({
                 direct: z.array(Element.dtoSchema),
                 transitive: z.array(transitiveCollectionSchema),
+            }),
+        });
+
+        export const GetCollectionVersion = new Route({
+            response: z.object({
+                result: Set.dtoSchema,
             }),
         });
 
@@ -339,52 +345,107 @@ export namespace Marketplace {
             }),
         });
 
+        export const GetElementsOfCollectionVersion = new Route({
+            response: z.object({
+                direct: z.array(Element.dtoSchema),
+                transitive: z.array(transitiveCollectionSchema),
+            }),
+        });
+
+        class TypedSchema<D, T> {
+            constructor(public readonly schema: T) {}
+
+            public readonly Type!: T extends z.ZodType
+                ? // if D is defined (override type), use D, otherwise infer from T
+                  D extends unknown
+                    ? z.infer<T>
+                    : D
+                : never;
+        }
+
         export namespace Events {
-            export const initialDataSchema = z.object({
-                data: z.object({
+            const defineEvent = <TName extends string, TData>(
+                eventName: TName,
+                dataSchema: TData
+            ) => {
+                const schema = z.object({
+                    event: z.literal(eventName),
+                    data: dataSchema,
+                    collectionEntityId: Set.entityIdSchema,
+                });
+                // We need to type seperately to keep the event-name as a literal type
+                return new TypedSchema<
+                    {
+                        event: TName;
+                        collectionEntityId: Set.EntityId;
+                        data: z.infer<TData>;
+                    },
+                    typeof schema
+                >(schema);
+            };
+
+            export const DependencyAdd = defineEvent(
+                'dependency:add',
+                Set.versionIdSchema
+            );
+
+            export const DependencyReplaceData = defineEvent(
+                'dependency:replace-data',
+                z.array(transitiveCollectionSchema)
+            );
+
+            export const InitialData = defineEvent(
+                'initialdata',
+                z.object({
                     collection: Set.dtoSchema,
                     elements: z.object({
                         direct: z.array(Element.dtoSchema),
                         transitive: z.array(transitiveCollectionSchema),
                     }),
-                }),
-            });
+                })
+            );
 
-            export type InitialData = z.infer<typeof initialDataSchema>;
+            export const ElementCreate = defineEvent(
+                'element:create',
+                Element.dtoSchema
+            );
 
-            export const dependencyAddSchema = z.object({
-                data: z.array(transitiveCollectionSchema),
-            });
+            export const ElementUpdate = defineEvent(
+                'element:update',
+                Element.dtoSchema
+            );
 
-            export type DependencyAdd = z.infer<typeof dependencyAddSchema>;
+            export const ElementDelete = defineEvent(
+                'element:delete',
+                z.object({
+                    entityId: Element.entityIdSchema,
+                })
+            );
 
-            export const elementCreateSchema = z.object({
-                data: Element.dtoSchema,
-            });
+            export const CollectionUpdate = defineEvent(
+                'collection:update',
+                Set.dtoSchema
+            );
 
-            export type ElementCreate = z.infer<typeof elementCreateSchema>;
-
-            export const elementUpdateSchema = z.object({
-                data: Element.dtoSchema,
-            });
-
-            export type ElementUpdate = z.infer<typeof elementUpdateSchema>;
-
-            export const collectionUpdateSchema = z.object({
-                data: Set.dtoSchema,
-            });
-
-            export type CollectionUpdate = z.infer<
-                typeof collectionUpdateSchema
-            >;
-
-            export const versionSwitchSchema = z.object({
-                data: z.object({
+            export const VersionSwitch = defineEvent(
+                'version:switch',
+                z.object({
                     newVersionId: Set.versionIdSchema,
-                }),
-            });
+                })
+            );
 
-            export type VersionSwitch = z.infer<typeof versionSwitchSchema>;
+            export const Event = new TypedSchema(
+                z.union([
+                    CollectionUpdate.schema,
+                    DependencyAdd.schema,
+                    DependencyReplaceData.schema,
+                    ElementCreate.schema,
+                    ElementDelete.schema,
+                    ElementUpdate.schema,
+                    InitialData.schema,
+                    VersionSwitch.schema,
+                ])
+            );
         }
     }
 }

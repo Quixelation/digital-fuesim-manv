@@ -11,7 +11,6 @@ import {
 } from '@angular/core';
 import { Store } from '@ngrx/store';
 import {
-    Mutable,
     uuid,
     type MaterialTemplate,
     type PersonnelTemplate,
@@ -19,15 +18,15 @@ import {
     type VehicleTemplate,
 } from 'fuesim-digital-shared';
 import { cloneDeep } from 'lodash-es';
-import { MessageService } from 'src/app/core/messages/message.service';
-import { getImageAspectRatio } from 'src/app/shared/functions/get-image-aspect-ratio';
-import type { SimpleChangesGeneric } from 'src/app/shared/types/simple-changes-generic';
-import type { AppState } from 'src/app/state/app.state';
+import { VersionedElementModalData } from '../versioned-element-modal/versioned-element-modal.component';
+import { MessageService } from '../../../../core/messages/message.service';
+import { getImageAspectRatio } from '../../../../shared/functions/get-image-aspect-ratio';
+import { AppState } from '../../../../state/app.state';
 import {
     selectMaterialTemplates,
     selectPersonnelTemplates,
-} from 'src/app/state/application/selectors/exercise.selectors';
-import { VersionedElementModalData } from '../versioned-element-modal/versioned-element-modal.component';
+} from '../../../../state/application/selectors/exercise.selectors';
+import { WritableDraft } from 'immer';
 
 @Component({
     selector: 'app-vehicle-template-form-marketplace',
@@ -40,7 +39,7 @@ export class VehicleTemplateFormMarketplaceComponent {
     private readonly store = inject<Store<AppState>>(Store);
 
     public data = input.required<VersionedElementModalData<any>>();
-    public values = input<Mutable<VehicleTemplate>>({
+    public values = input<WritableDraft<VehicleTemplate>>({
         type: 'vehicleTemplate',
         id: uuid(),
         image: {

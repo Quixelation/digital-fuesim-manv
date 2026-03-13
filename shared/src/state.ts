@@ -23,9 +23,14 @@ import {
     SpatialTree,
     MaterialTemplate,
     PersonnelTemplate,
+    versionedElementSchema,
     exerciseStatusSchema,
 } from './models/index.js';
-import type { ExerciseStatus, LogEntry } from './models/index.js';
+import type {
+    ExerciseStatus,
+    LogEntry,
+    VersionedCollectionPartial,
+} from './models/index.js';
 import type { ExerciseRadiogram } from './models/radiogram/index.js';
 import { getRadiogramConstructor } from './models/radiogram/index.js';
 import {
@@ -87,6 +92,10 @@ export class ExerciseState {
 
     @IsZodSchema(randomStateSchema)
     public readonly randomState: RandomState = newSeededRandomState();
+    // String, bc versionId is a Prefixed UUID
+    @IsZodSchema(versionedElementSchema.nullable())
+    public readonly selectedCollection: VersionedCollectionPartial | null =
+        null;
 
     @IsZodSchema(z.record(uuidSchema, viewportSchema))
     public readonly viewports: { readonly [key: UUID]: Viewport } = {};
@@ -210,5 +219,5 @@ export class ExerciseState {
      *
      * This number MUST be increased every time a change to any object (that is part of the state or the state itself) is made in a way that there may be states valid before that are no longer valid.
      */
-    static readonly currentStateVersion = 47;
+    static readonly currentStateVersion = 48;
 }

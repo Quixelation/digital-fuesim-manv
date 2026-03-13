@@ -28,8 +28,8 @@ import { SessionRepository } from '../database/repositories/session-repository.j
 import { ExerciseManagerService } from '../database/services/exercise-manager-service.js';
 import type { OidcService } from '../auth/oidc-service.js';
 import type { SocketReservedEvents } from './socket-reserved-events.js';
-import { CollectionService } from '../src/database/services/collection-service.js';
-import { CollectionRepository } from '../src/database/repositories/collection-repository.js';
+import { CollectionRepository } from '../database/repositories/collection-repository.js';
+import { CollectionService } from '../database/services/collection-service.js';
 
 // Some helper types
 /**

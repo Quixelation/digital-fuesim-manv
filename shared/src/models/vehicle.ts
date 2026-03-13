@@ -15,7 +15,7 @@ import type {
 import { versionedElementSchema } from './versioned-elements.js';
 
 export const vehicleSchema = z.strictObject({
-    ...versionedElementSchema.shape,
+    ...versionedElementSchema.partial().shape,
     id: uuidSchema,
     type: z.literal('vehicle'),
     vehicleType: z.string(),

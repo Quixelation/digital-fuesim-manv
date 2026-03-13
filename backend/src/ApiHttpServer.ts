@@ -6,7 +6,6 @@ import type { AuthService } from './auth/auth-service.js';
 import { Config } from './config.js';
 import type { ExerciseManagerService } from './database/services/exercise-manager-service.js';
 import type { ExerciseService } from './database/services/exercise-service.js';
-import { createAuthRouter } from './routers/auth-http-router.js';
 import { createCollectionsRouter } from './routers/collections-router.js';
 import { createExerciseManagerRouter } from './routers/exercise-manager-router.js';
 import { createExerciseRouter } from './routers/exercise-router.js';
@@ -16,6 +15,7 @@ import {
     errorHandler,
 } from './utils/http-handlers.js';
 import { CollectionService } from './database/services/collection-service.js';
+import { createAuthRouter } from './routers/auth-router.js';
 
 export class ApiHttpServer {
     public readonly httpServer: HttpServer;

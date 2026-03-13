@@ -80,7 +80,11 @@ export class DragElementService {
      * @param event the mouse event
      * @param transferTemplate the template to be added
      */
-    public onMouseDown(event: MouseEvent, transferTemplate: TransferTemplate, entityVersion?: VersionedElementPartial) {
+    public onMouseDown(
+        event: MouseEvent,
+        transferTemplate: TransferTemplate,
+        entityVersion?: VersionedElementPartial
+    ) {
         this.transferringTemplate = transferTemplate;
         this.transferingEntityVersion = entityVersion;
         // Create the drag image

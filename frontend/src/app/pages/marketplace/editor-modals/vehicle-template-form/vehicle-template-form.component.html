@@ -81,7 +81,7 @@
     <label class="form-label"
         >Materialien
 
-        @if (!disabled) {
+        @if (!disabled()) {
             <div ngbDropdown autoClose="outside" class="d-inline-block">
                 <button
                     ngbDropdownToggle
@@ -124,7 +124,7 @@
 <div class="form-group mb-3">
     <label class="form-label"
         >Personal
-        @if (!disabled) {
+        @if (!disabled()) {
             <div ngbDropdown autoClose="outside" class="d-inline-block">
                 <button
                     ngbDropdownToggle

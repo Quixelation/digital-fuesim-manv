@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { CollectionService } from '../database/services/collection-service.js';
 import { filter, Subject, takeUntil } from 'rxjs';
 import { SSE } from '../sse.js';
+import { CollectionEventSender } from '../collections/collection-event-sender.js';
 
 export function createCollectionsRouter(collectionService: CollectionService) {
     const router = Router();
@@ -42,9 +43,21 @@ export function createCollectionsRouter(collectionService: CollectionService) {
     });
 
     router.get('/my', async (req, res) => {
+        const includeDraftState = req.query['includeDraftState'] === 'true';
+
+        console.log(
+            '[CollectionsRouter] GET /my - includeDraftState:',
+            includeDraftState
+        );
+        console.log(
+            '[CollectionsRouter] GET /my - includeDraftState:',
+            typeof includeDraftState
+        );
+
         const result =
             await collectionService.getLatestExerciseElementSetsForUser(
-                req.session!.user.id
+                req.session!.user.id,
+                { includeDraftState }
             );
 
         return res.send(
@@ -105,16 +118,16 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             throw new Error('Invalid exercise element set version id');
         }
 
-        const result =
-            await collectionService.getLatestCollectionById(
-                exerciseElementSetId
-            );
+        const result = await collectionService.getLatestCollectionById(
+            exerciseElementSetId,
+            { draftState: true }
+        );
         if (!result) {
             throw new NotFoundError();
         }
 
         return res.send(
-            Marketplace.Set.GetByVersionId.responseSchema.encode({
+            Marketplace.Set.GetByEntityId.responseSchema.encode({
                 result: {
                     draftState: result.draftState,
                     createdAt: result.createdAt.toISOString(),
@@ -179,10 +192,13 @@ export function createCollectionsRouter(collectionService: CollectionService) {
                 throw new Error('Invalid exercise element set version id');
             }
 
-            const data = await collectionService.addCollectionDependency({
-                importTo: setEntityId,
-                importFrom: importSetVersionId,
-            });
+            const data = await collectionService.addCollectionDependency(
+                {
+                    importTo: setEntityId,
+                    importFrom: importSetVersionId,
+                },
+                { throwOnDraftState: false }
+            );
 
             res.send(
                 Marketplace.Set.Import.responseSchema.encode({
@@ -239,7 +255,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             throw new Error('Invalid exercise element set entity id');
         }
 
-        const data = await collectionService.getLatestElementsOfCollection(
+        const data = await collectionService.getLatestDraftElementsOfCollection(
             setEntityId,
             { includeDependencies: true }
         );
@@ -251,7 +267,6 @@ export function createCollectionsRouter(collectionService: CollectionService) {
                     //@ts-expect-error - We need to check this in the service layer
                     transitive: data.transitive,
                     //TODO: @Quixelation
-                    //@ts-expect-error - We need to check this in the service layer
                     direct: data.direct.map((element) => ({
                         content: element.content,
                         createdAt: element.createdAt.toISOString(),
@@ -272,142 +287,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             throw new Error('Invalid exercise element set entity id');
         }
 
-        const sse = new SSE(req, res);
-
-        const collection = await collectionService.getLatestCollectionById(
-            setEntityId,
-            { draftState: true }
-        );
-        const data = await collectionService.getLatestElementsOfCollection(
-            setEntityId,
-            { includeDependencies: true, allowDraftState: true }
-        );
-
-        if (!collection) {
-            sse.sendEvent('error', { message: 'Collection not found' });
-            sse.close();
-            return;
-        }
-
-        console.log(data);
-
-        sse.sendEvent(
-            'initialData',
-            Marketplace.Set.Events.initialDataSchema.encode({
-                data: {
-                    collection: {
-                        title: collection.title,
-                        createdAt: collection.createdAt.toISOString(),
-                        entityId: collection.entityId,
-                        owner: collection.owner,
-                        stateVersion: collection.stateVersion,
-                        version: collection.version,
-                        versionId: collection.versionId,
-                        visibility: collection.visibility,
-                        draftState: collection.draftState,
-                    },
-                    elements: {
-                        //TODO: @Quixelation
-                        //@ts-expect-error - We need to check this in the service layer
-                        transitive: data.transitive,
-                        //TODO: @Quixelation
-                        direct: data.direct.map((element) => ({
-                            content: element.content,
-                            createdAt: element.createdAt.toISOString(),
-                            entityId: element.entityId,
-                            stateVersion: element.stateVersion,
-                            title: element.title,
-                            version: element.version,
-                            versionId: element.versionId,
-                        })),
-                    },
-                },
-            })
-        );
-
-        const latestCollectionVersion =
-            await collectionService.getLatestCollectionById(setEntityId);
-        if (!latestCollectionVersion) {
-            sse.sendEvent('error', { message: 'Collection not found' });
-            sse.close();
-            return;
-        }
-
-        let dependencies: Marketplace.Set.EntityId[] = [];
-
-        const loadDependencies = async () => {
-            dependencies = (
-                await collectionService.getCollectionDependencies(
-                    latestCollectionVersion?.versionId
-                )
-            ).map((dependency) => dependency.entityId);
-        };
-
-        await loadDependencies();
-
-        collectionService.events
-            .pipe(
-                filter(
-                    (update) =>
-                        update.collectionId === setEntityId ||
-                        dependencies.includes(update.collectionId)
-                ),
-                takeUntil(sse.destroy$)
-            )
-            .subscribe(async (update) => {
-                if (!update) return;
-
-                switch (update.type) {
-                    case 'element:create':
-                        sse.sendEvent(
-                            'element:create',
-                            Marketplace.Set.Events.elementCreateSchema.parse({
-                                data: update.payload,
-                            })
-                        );
-                        break;
-                    case 'element:update':
-                        sse.sendEvent('element:update', {
-                            data: update.payload,
-                        });
-                        break;
-                    case 'version:switch':
-                        sse.sendEvent(
-                            'version:switch',
-                            Marketplace.Set.Events.versionSwitchSchema.encode({
-                                data: {
-                                    newVersionId: update.payload.versionId,
-                                },
-                            })
-                        );
-                        break;
-                    case 'collection:update':
-                        sse.sendEvent(
-                            update.type,
-                            Marketplace.Set.Events.collectionUpdateSchema.encode(
-                                {
-                                    data: update.payload,
-                                }
-                            )
-                        );
-                        break;
-                    case 'dependency:add':
-                        await loadDependencies();
-                        sse.sendEvent(
-                            'dependency:add',
-                            Marketplace.Set.Events.dependencyAddSchema.encode({
-                                data:
-                                    (
-                                        await collectionService.getLatestElementsOfCollection(
-                                            update.collectionId,
-                                            { includeDependencies: true }
-                                        )
-                                    ).transitive ?? [],
-                            })
-                        );
-                        break;
-                }
-            });
+        new CollectionEventSender(req, res, setEntityId, collectionService);
     });
 
     router.post('/:setEntityId/save', async (req, res) => {
@@ -451,7 +331,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             req.body
         );
 
-        const data = await collectionService.changeSetVisbility(
+        const data = await collectionService.makeCollectionPublic(
             setEntityId,
             parsedBody.visibility
         );
@@ -491,6 +371,78 @@ export function createCollectionsRouter(collectionService: CollectionService) {
                         visibility: createdSet.visibility,
                     },
                 })
+            );
+        }
+    );
+    router.get('/:setEntityId/version/:setVersionId', async (req, res) => {
+        const { setEntityId, setVersionId } = req.params;
+        if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set entity id');
+        }
+        if (!Marketplace.Set.isSetVersionId(setVersionId)) {
+            throw new Error('Invalid exercise element set version id');
+        }
+
+        const collection =
+            await collectionService.getCollectionVersionById(setVersionId);
+        if (!collection) {
+            throw new NotFoundError();
+        }
+
+        res.send(
+            Marketplace.Set.GetCollectionVersion.responseSchema.encode({
+                result: {
+                    draftState: collection.draftState,
+                    versionId: collection.versionId,
+                    version: collection.version,
+                    entityId: collection.entityId,
+                    stateVersion: collection.stateVersion,
+                    createdAt: collection.createdAt.toISOString(),
+                    title: collection.title,
+                    owner: collection.owner,
+                    visibility: collection.visibility,
+                },
+            })
+        );
+    });
+
+    router.get(
+        '/:setEntityId/version/:setVersionId/elements',
+        async (req, res) => {
+            const { setEntityId, setVersionId } = req.params;
+            if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+                throw new Error('Invalid exercise element set entity id');
+            }
+            if (!Marketplace.Set.isSetVersionId(setVersionId)) {
+                throw new Error('Invalid exercise element set version id');
+            }
+
+            const data = await collectionService.getElementsOfCollectionVersion(
+                setVersionId,
+                { includeDependencies: true, allowDraftState: false }
+            );
+            if (!data) {
+                throw new NotFoundError();
+            }
+
+            res.send(
+                Marketplace.Set.GetElementsOfCollectionVersion.responseSchema.encode(
+                    {
+                        //TODO: @Quixelation
+                        //@ts-expect-error - We need to check this in the service layer
+                        transitive: data.transitive,
+                        //TODO: @Quixelation
+                        direct: data.direct.map((element) => ({
+                            content: element.content,
+                            createdAt: element.createdAt.toISOString(),
+                            entityId: element.entityId,
+                            stateVersion: element.stateVersion,
+                            title: element.title,
+                            version: element.version,
+                            versionId: element.versionId,
+                        })),
+                    }
+                )
             );
         }
     );

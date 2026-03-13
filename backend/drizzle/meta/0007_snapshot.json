@@ -1,6 +1,6 @@
 {
-    "id": "966bfac0-4128-4877-a92e-8492c923acb7",
-    "prevId": "72a5a9ea-fd21-4840-9bc4-0756d98d3d66",
+    "id": "daf5cc63-ef33-4325-9691-127c9ef8f3c2",
+    "prevId": "c18a95bf-3849-46e9-b391-d66b5f6c2f14",
     "version": "7",
     "dialect": "postgresql",
     "tables": {
@@ -116,14 +116,6 @@
                     "columns": [
                         "collectionVersionId",
                         "dependentCollectionVersionId"
-                    ]
-                },
-                "unique_collection_dependency_2": {
-                    "name": "unique_collection_dependency_2",
-                    "nullsNotDistinct": false,
-                    "columns": [
-                        "collectionVersionId",
-                        "dependentCollectionEntityId"
                     ]
                 }
             },
@@ -406,14 +398,14 @@
                     "primaryKey": false,
                     "notNull": true
                 },
-                "participantId": {
-                    "name": "participantId",
+                "participantKey": {
+                    "name": "participantKey",
                     "type": "char(6)",
                     "primaryKey": false,
                     "notNull": true
                 },
-                "trainerId": {
-                    "name": "trainerId",
+                "trainerKey": {
+                    "name": "trainerKey",
                     "type": "char(8)",
                     "primaryKey": false,
                     "notNull": true
@@ -666,85 +658,6 @@
     "roles": {},
     "policies": {},
     "views": {
-        "public.latest_exercise_element_sets": {
-            "columns": {
-                "versionId": {
-                    "name": "versionId",
-                    "type": "varchar",
-                    "primaryKey": true,
-                    "notNull": true
-                },
-                "entityId": {
-                    "name": "entityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "version": {
-                    "name": "version",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "stateVersion": {
-                    "name": "stateVersion",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "createdBy": {
-                    "name": "createdBy",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "'unknown'"
-                },
-                "createdAt": {
-                    "name": "createdAt",
-                    "type": "timestamp with time zone",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "now()"
-                },
-                "title": {
-                    "name": "title",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "description": {
-                    "name": "description",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "visibility": {
-                    "name": "visibility",
-                    "type": "exercise_set_visibility",
-                    "typeSchema": "public",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "'private'"
-                },
-                "owner": {
-                    "name": "owner",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "draftState": {
-                    "name": "draftState",
-                    "type": "boolean",
-                    "primaryKey": false,
-                    "notNull": true
-                }
-            },
-            "definition": "select \"exercise_element_sets\".\"versionId\", \"exercise_element_sets\".\"entityId\", \"exercise_element_sets\".\"version\", \"exercise_element_sets\".\"stateVersion\", \"exercise_element_sets\".\"createdBy\", \"exercise_element_sets\".\"createdAt\", \"exercise_element_sets\".\"title\", \"exercise_element_sets\".\"description\", \"exercise_element_sets\".\"visibility\", \"exercise_element_sets\".\"owner\", \"exercise_element_sets\".\"draftState\" from \"exercise_element_sets\" inner join \"latest_exercise_element_set_version_numbers\" on (\"exercise_element_sets\".\"entityId\" = \"latest_exercise_element_set_version_numbers\".\"entityId\" and \"exercise_element_sets\".\"version\" = \"latestversion\")",
-            "name": "latest_exercise_element_sets",
-            "schema": "public",
-            "isExisting": false,
-            "materialized": false
-        },
         "public.latest_exercise_element_template_version_numbers": {
             "columns": {
                 "entityId": {
@@ -821,21 +734,6 @@
             },
             "definition": "select \"exercise_element_templates\".\"versionId\", \"exercise_element_templates\".\"entityId\", \"exercise_element_templates\".\"version\", \"exercise_element_templates\".\"stateVersion\", \"exercise_element_templates\".\"createdBy\", \"exercise_element_templates\".\"createdAt\", \"exercise_element_templates\".\"title\", \"exercise_element_templates\".\"description\", \"exercise_element_templates\".\"content\" from \"exercise_element_templates\" inner join \"latest_exercise_element_template_version_numbers\" on (\"exercise_element_templates\".\"entityId\" = \"latest_exercise_element_template_version_numbers\".\"entityId\" and \"exercise_element_templates\".\"version\" = \"latestversion\")",
             "name": "latest_exercise_element_templates",
-            "schema": "public",
-            "isExisting": false,
-            "materialized": false
-        },
-        "public.latest_exercise_element_set_version_numbers": {
-            "columns": {
-                "entityId": {
-                    "name": "entityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                }
-            },
-            "definition": "select \"entityId\", max(\"version\") as \"latestversion\" from \"exercise_element_sets\" group by \"exercise_element_sets\".\"entityId\"",
-            "name": "latest_exercise_element_set_version_numbers",
             "schema": "public",
             "isExisting": false,
             "materialized": false

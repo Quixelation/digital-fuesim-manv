@@ -1,4 +1,12 @@
 CREATE TYPE "public"."exercise_set_visibility" AS ENUM('private', 'public');--> statement-breakpoint
+CREATE TABLE "collection_dependency_mapping" (
+	"collectionEntityId" varchar NOT NULL,
+	"collectionVersionId" varchar NOT NULL,
+	"dependentCollectionEntityId" varchar NOT NULL,
+	"dependentCollectionVersionId" varchar NOT NULL,
+	CONSTRAINT "unique_collection_dependency" UNIQUE("collectionVersionId","dependentCollectionVersionId")
+);
+--> statement-breakpoint
 CREATE TABLE "exercise_element_to_set_mapping" (
 	"setEntityId" varchar NOT NULL,
 	"setVersionId" varchar NOT NULL,
@@ -40,9 +48,9 @@ CREATE TABLE "exercise_element_templates" (
 	CONSTRAINT "unique_template_id" UNIQUE("entityId","versionId")
 );
 --> statement-breakpoint
+ALTER TABLE "collection_dependency_mapping" ADD CONSTRAINT "collection_dependency_mapping_collectionVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("collectionVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "collection_dependency_mapping" ADD CONSTRAINT "collection_dependency_mapping_dependentCollectionVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("dependentCollectionVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exercise_element_to_set_mapping" ADD CONSTRAINT "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("setVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exercise_element_to_set_mapping" ADD CONSTRAINT "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk" FOREIGN KEY ("elementVersionId") REFERENCES "public"."exercise_element_templates"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE VIEW "public"."latest_exercise_element_set_version_numbers" AS (select "entityId", max("version") as "latestversion" from "exercise_element_sets" group by "exercise_element_sets"."entityId");--> statement-breakpoint
-CREATE VIEW "public"."latest_exercise_element_sets" AS (select "exercise_element_sets"."versionId", "exercise_element_sets"."entityId", "exercise_element_sets"."version", "exercise_element_sets"."stateVersion", "exercise_element_sets"."createdBy", "exercise_element_sets"."createdAt", "exercise_element_sets"."title", "exercise_element_sets"."description", "exercise_element_sets"."visibility", "exercise_element_sets"."owner", "exercise_element_sets"."draftState" from "exercise_element_sets" inner join "latest_exercise_element_set_version_numbers" on ("exercise_element_sets"."entityId" = "latest_exercise_element_set_version_numbers"."entityId" and "exercise_element_sets"."version" = "latestversion"));--> statement-breakpoint
 CREATE VIEW "public"."latest_exercise_element_template_version_numbers" AS (select "entityId", max("version") as "latestversion" from "exercise_element_templates" group by "exercise_element_templates"."entityId");--> statement-breakpoint
-CREATE VIEW "public"."latest_exercise_element_templates" AS (select "exercise_element_templates"."versionId", "exercise_element_templates"."entityId", "exercise_element_templates"."version", "exercise_element_templates"."stateVersion", "exercise_element_templates"."createdBy", "exercise_element_templates"."createdAt", "exercise_element_templates"."title", "exercise_element_templates"."description", "exercise_element_templates"."content" from "exercise_element_templates" inner join "latest_exercise_element_template_version_numbers" on ("exercise_element_templates"."entityId" = "latest_exercise_element_template_version_numbers"."entityId" and "exercise_element_templates"."version" = "latestversion"));--> statement-breakpoint
+CREATE VIEW "public"."latest_exercise_element_templates" AS (select "exercise_element_templates"."versionId", "exercise_element_templates"."entityId", "exercise_element_templates"."version", "exercise_element_templates"."stateVersion", "exercise_element_templates"."createdBy", "exercise_element_templates"."createdAt", "exercise_element_templates"."title", "exercise_element_templates"."description", "exercise_element_templates"."content" from "exercise_element_templates" inner join "latest_exercise_element_template_version_numbers" on ("exercise_element_templates"."entityId" = "latest_exercise_element_template_version_numbers"."entityId" and "exercise_element_templates"."version" = "latestversion"));

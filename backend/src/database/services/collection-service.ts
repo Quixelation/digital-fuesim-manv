@@ -5,84 +5,13 @@ import { CollectionRepository } from '../repositories/collection-repository.js';
 import { z } from 'zod';
 import { Subject } from 'rxjs';
 
-abstract class CollectionsEvent {
-    public type!: string;
-    public payload!: object;
-    public collectionId!: Marketplace.Set.EntityId;
-}
-
-export class ElementCreateEvent implements CollectionsEvent {
-    public type = 'element:create' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: Marketplace.Element.Dto
-    ) {}
-}
-
-export class ElementUpdateEvent implements CollectionsEvent {
-    public type = 'element:update' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: Marketplace.Element.Dto
-    ) {}
-}
-
-export class ElementDeleteEvent implements CollectionsEvent {
-    public type = 'element:delete' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: {
-            entityId: Marketplace.Element.EntityId;
-        }
-    ) {}
-}
-
-export class CollectionUpdateEvent implements CollectionsEvent {
-    public type = 'collection:update' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: Marketplace.Set.Dto
-    ) {}
-}
-
-export class AddDependencyEvent implements CollectionsEvent {
-    public type = 'dependency:add' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: {
-            dependencyEntityId: Marketplace.Set.VersionId;
-        }
-    ) {}
-}
-
-export class SwitchVersionEvent implements CollectionsEvent {
-    public type = 'version:switch' as const;
-
-    constructor(
-        public collectionId: Marketplace.Set.EntityId,
-        public payload: {
-            versionId: Marketplace.Set.VersionId;
-        }
-    ) {}
-}
-
 export class CollectionService {
     public get events() {
         return this.eventSubject.asObservable();
     }
 
     private eventSubject = new Subject<
-        | ElementCreateEvent
-        | ElementUpdateEvent
-        | ElementDeleteEvent
-        | AddDependencyEvent
-        | CollectionUpdateEvent
-        | SwitchVersionEvent
+        typeof Marketplace.Set.Events.Event.Type
     >();
 
     private exists<T>(
@@ -116,11 +45,13 @@ export class CollectionService {
                 data.dependencyEntityId
             );
 
-            this.eventSubject.next(
-                new SwitchVersionEvent(data.removeFrom, {
-                    versionId: draftState.versionId,
-                })
-            );
+            this.eventSubject.next({
+                event: 'version:switch',
+                data: {
+                    newVersionId: draftState.versionId,
+                },
+                collectionEntityId: data.removeFrom,
+            });
 
             return draftState;
         });
@@ -132,8 +63,9 @@ export class CollectionService {
                 collectionEntityId
             );
 
-        this.eventSubject.next(
-            new CollectionUpdateEvent(collectionEntityId, {
+        this.eventSubject.next({
+            event: 'collection:update',
+            data: {
                 entityId: data.entityId,
                 versionId: data.versionId,
                 version: data.version,
@@ -143,8 +75,9 @@ export class CollectionService {
                 stateVersion: data.stateVersion,
                 visibility: data.visibility,
                 draftState: data.draftState,
-            })
-        );
+            },
+            collectionEntityId: collectionEntityId,
+        });
 
         return data;
     }
@@ -217,17 +150,19 @@ export class CollectionService {
                 await tx.getElementsOfCollectionVersion(data.importFrom)
             );
 
-            this.eventSubject.next(
-                new SwitchVersionEvent(data.importTo, {
-                    versionId: latestDependentCollectionVersion.versionId,
-                })
-            );
+            this.eventSubject.next({
+                event: 'version:switch',
+                data: {
+                    newVersionId: latestDependentCollectionVersion.versionId,
+                },
+                collectionEntityId: data.importTo,
+            });
 
-            this.eventSubject.next(
-                new AddDependencyEvent(data.importTo, {
-                    dependencyEntityId: data.importFrom,
-                })
-            );
+            this.eventSubject.next({
+                event: 'dependency:add',
+                data: data.importFrom,
+                collectionEntityId: data.importTo,
+            });
 
             return {
                 collection: importFromCollection,
@@ -257,14 +192,17 @@ export class CollectionService {
                 newSetVersion.versionId
             );
 
-            this.eventSubject.next(
-                new SwitchVersionEvent(setEntityId, {
-                    versionId: newSetVersion.versionId,
-                })
-            );
+            this.eventSubject.next({
+                event: 'version:switch',
+                data: {
+                    newVersionId: newSetVersion.versionId,
+                },
+                collectionEntityId: setEntityId,
+            });
 
-            this.eventSubject.next(
-                new ElementCreateEvent(setEntityId, {
+            this.eventSubject.next({
+                event: 'element:create',
+                data: {
                     versionId: result.versionId,
                     entityId: result.entityId,
                     version: result.version,
@@ -272,8 +210,9 @@ export class CollectionService {
                     stateVersion: result.stateVersion,
                     createdAt: result.createdAt.toISOString(),
                     title: result.title,
-                })
-            );
+                },
+                collectionEntityId: setEntityId,
+            });
 
             return {
                 newSetVersionId: newSetVersion.versionId,
@@ -282,9 +221,13 @@ export class CollectionService {
         });
     }
 
-    public async getLatestExerciseElementSetsForUser(userId: string) {
+    public async getLatestExerciseElementSetsForUser(
+        userId: string,
+        opts: { includeDraftState: boolean }
+    ) {
         return this.exerciseElementSetRepository.getLatestCollectionForUser(
-            userId
+            userId,
+            { allowDraftState: opts.includeDraftState }
         );
     }
 
@@ -299,6 +242,14 @@ export class CollectionService {
         );
     }
 
+    public async getCollectionVersionById(
+        collectionVersionId: Marketplace.Set.VersionId
+    ) {
+        return this.exerciseElementSetRepository.getCollectionByVersionId(
+            collectionVersionId
+        );
+    }
+
     public async getCollectionDependencies(
         collectionVersionId: Marketplace.Set.VersionId
     ) {
@@ -310,6 +261,29 @@ export class CollectionService {
             entityId: dependency.collectionEntityId,
             versionId: dependency.collectionVersionId,
         }));
+    }
+
+    public async getLatestDraftElementsOfCollection(
+        entity: Marketplace.Set.EntityId,
+        opts: { includeDependencies: boolean }
+    ) {
+        const latestConnection = this.exists(
+            'latestCollection',
+            await this.exerciseElementSetRepository.getLatestCollectionByEntityId(
+                entity,
+                { allowDraftState: true }
+            )
+        );
+
+        const elements = await this.getElementsOfCollectionVersion(
+            latestConnection.versionId,
+            {
+                includeDependencies: opts.includeDependencies,
+                allowDraftState: true,
+            }
+        );
+
+        return elements;
     }
 
     private async getFullFlatDependencyTree(
@@ -343,8 +317,8 @@ export class CollectionService {
         return allDeps;
     }
 
-    public async getLatestElementsOfCollection(
-        collectionEntityId: Marketplace.Set.EntityId,
+    public async getElementsOfCollectionVersion(
+        collectionVersionId: Marketplace.Set.VersionId,
         opts: {
             includeDependencies?: boolean;
             allowDraftState: boolean;
@@ -353,24 +327,30 @@ export class CollectionService {
         const { includeDependencies: Opt_includeDependencies } = opts || {
             includeDependencies: false,
         };
+
+        const baseCollection = this.exists(
+            'collection for version',
+            await this.exerciseElementSetRepository.getCollectionByVersionId(
+                collectionVersionId
+            )
+        )
+
+        if(baseCollection.draftState === true && opts.allowDraftState === false) {
+            throw new Error('Collection version is in draft state and allowDraftState is set to false');
+        }
+
         console.log(opts);
-        const latestSetVersion = this.exists(
-            'latest set version',
-            await this.getLatestCollectionById(collectionEntityId, {
-                draftState: opts.allowDraftState,
-            })
-        );
         const directCollectionElements =
             await this.exerciseElementSetRepository.getElementsOfCollectionVersion(
-                latestSetVersion.versionId
+                collectionVersionId
             );
 
         if (Opt_includeDependencies === false) {
             return { direct: directCollectionElements };
         }
-        console.log('latestSetVersion', latestSetVersion.versionId);
+        console.log('latestSetVersion', collectionVersionId);
         const dependentCollectionVersions =
-            await this.getFullFlatDependencyTree(latestSetVersion.versionId);
+            await this.getFullFlatDependencyTree(collectionVersionId);
 
         console.log('dependentCollectionVersions', dependentCollectionVersions);
 
@@ -379,7 +359,7 @@ export class CollectionService {
                 Promise.all([
                     this.exists(
                         'collection for dependency',
-                        this.exerciseElementSetRepository.getCollectionByVersionId(
+                        this.getCollectionVersionById(
                             dependency.collectionVersionId
                         )
                     ),
@@ -447,17 +427,21 @@ export class CollectionService {
                     newSet.versionId
                 );
 
-                this.eventSubject.next(
-                    new SwitchVersionEvent(containingSet.entityId, {
-                        versionId: newSet.versionId,
-                    })
-                );
+                this.eventSubject.next({
+                    event: 'version:switch',
+                    data: {
+                        newVersionId: newSet.versionId,
+                    },
+                    collectionEntityId: containingSet.entityId,
+                });
 
-                this.eventSubject.next(
-                    new ElementDeleteEvent(containingSet.entityId, {
+                this.eventSubject.next({
+                    event: 'element:delete',
+                    data: {
                         entityId: elementEntityId,
-                    })
-                );
+                    },
+                    collectionEntityId: containingSet.entityId,
+                });
 
                 return newSet;
             }
@@ -510,14 +494,17 @@ export class CollectionService {
                 newSetVersion.versionId
             );
 
-            this.eventSubject.next(
-                new SwitchVersionEvent(latestContainingSet.entityId, {
-                    versionId: newSetVersion.versionId,
-                })
-            );
+            this.eventSubject.next({
+                event: 'version:switch',
+                data: {
+                    newVersionId: newSetVersion.versionId,
+                },
+                collectionEntityId: latestContainingSet.entityId,
+            });
 
-            this.eventSubject.next(
-                new ElementUpdateEvent(latestContainingSet.entityId, {
+            this.eventSubject.next({
+                event: 'element:update',
+                data: {
                     entityId: entityId,
                     versionId: newElementVersion.versionId,
                     version: newElementVersion.version,
@@ -526,8 +513,9 @@ export class CollectionService {
                     stateVersion: newElementVersion.stateVersion,
                     createdAt: newElementVersion.createdAt.toISOString(),
                     title: newElementVersion.title,
-                })
-            );
+                },
+                collectionEntityId: latestContainingSet.entityId,
+            });
 
             return {
                 newSetVersionId: newSetVersion.versionId,
@@ -536,23 +524,18 @@ export class CollectionService {
         });
     }
 
-    public async changeSetVisbility(
+    public async makeCollectionPublic(
         setEntityId: Marketplace.Set.EntityId,
-        visibility: Marketplace.ElementSetVisibility
     ) {
-        //TODO: @Quixelation - rework this and do checks like create new version etc
-        if (visibility === 'private') {
-            throw new Error('private visibility can not be set afterwards');
-        }
-
         const data =
             await this.exerciseElementSetRepository.setCollectionVisibility(
                 setEntityId,
-                visibility
+                "public"
             );
 
-        this.eventSubject.next(
-            new CollectionUpdateEvent(setEntityId, {
+        this.eventSubject.next({
+            event: 'collection:update',
+            data: {
                 entityId: data.entityId,
                 versionId: data.versionId,
                 version: data.version,
@@ -562,8 +545,9 @@ export class CollectionService {
                 stateVersion: data.stateVersion,
                 visibility: data.visibility,
                 draftState: data.draftState,
-            })
-        );
+            },
+            collectionEntityId: setEntityId,
+        });
 
         return data;
     }

@@ -463,9 +463,12 @@ export class CollectionRepository extends BaseRepository {
         return this.onlySingle(result);
     }
 
-    public async getLatestCollectionForUser(userId: string) {
+    public async getLatestCollectionForUser(
+        userId: string,
+        opts?: { allowDraftState?: boolean }
+    ) {
         const latestCollections = this.latestCollections({
-            allowDraftState: true,
+            allowDraftState: opts?.allowDraftState ?? true,
         });
 
         const result = this.databaseConnection

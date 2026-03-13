@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { Marketplace } from 'fuesim-digital-shared';
+import { Marketplace, VersionedCollectionPartial } from 'fuesim-digital-shared';
 import { BehaviorSubject, lastValueFrom } from 'rxjs';
 import { httpOrigin } from './api-origins';
 
@@ -46,7 +46,7 @@ export class CollectionService {
         setEntityId: Marketplace.Set.EntityId,
         callback: (data: ExerciseElementSetSubscriptionData) => void
     ): () => void {
-        const collectionEventSource = new EventSource(
+        let collectionEventSource = new EventSource(
             `${this.ENDPOINT}/${setEntityId}/events`,
             { withCredentials: true }
         );
@@ -55,129 +55,159 @@ export class CollectionService {
             setEntityId,
             new BehaviorSubject<ExerciseElementSetSubscriptionData | null>(null)
         );
-
-        collectionEventSource.addEventListener('initialData', (event) => {
+        collectionEventSource.addEventListener('change', (event) => {
             console.log(
-                `Received initialData event for setEntityId ${setEntityId}:`,
+                `Received change event for setEntityId ${setEntityId}:`,
                 event
             );
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.InitialData;
-            this._elementSetSubscriptions.get(setEntityId)?.next({
-                collection: parsedData.data.collection,
-                objects: parsedData.data.elements,
-            });
-        });
-
-        collectionEventSource.addEventListener('element:create', (event) => {
-            console.log(
-                `Received initialData event for setEntityId ${setEntityId}:`,
-                event
+            const changeEvent = Marketplace.Set.Events.Event.schema.parse(
+                JSON.parse(event.data)
             );
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.ElementCreate;
-            const currentValue = this._elementSetSubscriptions
-                .get(setEntityId)
-                ?.getValue();
-            if (!currentValue) return;
-            const newValue = {
-                ...currentValue,
-                objects: {
-                    ...currentValue.objects,
-                    direct: [...currentValue.objects.direct, parsedData.data],
-                },
-            };
-            this._elementSetSubscriptions.get(setEntityId)?.next(newValue);
+
+            switch (changeEvent.event) {
+                case 'initialdata': {
+                    this._elementSetSubscriptions.get(setEntityId)?.next({
+                        collection: changeEvent.data.collection,
+                        objects: changeEvent.data.elements,
+                    });
+                    break;
+                }
+                case 'element:create': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        objects: {
+                            ...currentValue.objects,
+                            direct: [
+                                ...currentValue.objects.direct,
+                                changeEvent.data,
+                            ],
+                        },
+                    };
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+                case 'element:update': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        objects: {
+                            ...currentValue.objects,
+                            direct: currentValue.objects.direct.map((object) =>
+                                object.entityId === changeEvent.data.entityId
+                                    ? changeEvent.data
+                                    : object
+                            ),
+                        },
+                    };
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+
+                case 'element:delete': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        objects: {
+                            ...currentValue.objects,
+                            direct: currentValue.objects.direct.filter(
+                                (object) =>
+                                    object.entityId !==
+                                    changeEvent.data.entityId
+                            ),
+                        },
+                    };
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+
+                case 'dependency:add': {
+                    //TODO: @Quixelation
+                    break;
+                }
+
+                case 'dependency:replace-data': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        objects: {
+                            direct: currentValue.objects.direct,
+                            transitive: changeEvent.data,
+                        },
+                    };
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+                case 'version:switch': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        collection: {
+                            ...currentValue.collection,
+                            versionId: changeEvent.data.newVersionId,
+                        },
+                    };
+
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+
+                case 'collection:update': {
+                    const currentValue = this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.getValue();
+                    if (!currentValue) return;
+                    const newValue = {
+                        ...currentValue,
+                        collection: changeEvent.data,
+                    };
+                    this._elementSetSubscriptions
+                        .get(setEntityId)
+                        ?.next(newValue);
+                    break;
+                }
+                default: {
+                    console.warn(
+                        `Unhandled event type ${changeEvent} for setEntityId ${setEntityId}`
+                    );
+                }
+            }
         });
 
-        collectionEventSource.addEventListener('element:update', (event) => {
-            console.log(
-                `Received element:update event for setEntityId ${setEntityId}:`,
-                event
+        collectionEventSource.onerror = (error) => {
+            console.error(
+                `Error in EventSource for setEntityId ${setEntityId}:`,
+                error
             );
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.ElementUpdate;
-            const currentValue = this._elementSetSubscriptions
-                .get(setEntityId)
-                ?.getValue();
-            if (!currentValue) return;
-            const newValue = {
-                ...currentValue,
-                objects: {
-                    ...currentValue.objects,
-                    direct: currentValue.objects.direct.map((object) =>
-                        object.entityId === parsedData.data.entityId
-                            ? parsedData.data
-                            : object
-                    ),
-                },
-            };
-            this._elementSetSubscriptions.get(setEntityId)?.next(newValue);
-        });
-
-        collectionEventSource.addEventListener('dependency:add', (event) => {
-            console.log(
-                `Received dependency:add event for setEntityId ${setEntityId}:`,
-                event
-            );
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.DependencyAdd;
-            const currentValue = this._elementSetSubscriptions
-                .get(setEntityId)
-                ?.getValue();
-            if (!currentValue) return;
-            const newValue = {
-                ...currentValue,
-                objects: {
-                    direct: currentValue.objects.direct,
-                    transitive: parsedData.data,
-                },
-            };
-            this._elementSetSubscriptions.get(setEntityId)?.next(newValue);
-        });
-
-        collectionEventSource.addEventListener('version:switch', (event) => {
-            console.log(
-                `Received version:switch event for setEntityId ${setEntityId}:`,
-                event
-            );
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.VersionSwitch;
-            const currentValue = this._elementSetSubscriptions
-                .get(setEntityId)
-                ?.getValue();
-            if (!currentValue) return;
-            const newValue = {
-                ...currentValue,
-                collection: {
-                    ...currentValue.collection,
-                    versionId: parsedData.data.newVersionId,
-                },
-            };
-            this._elementSetSubscriptions.get(setEntityId)?.next(newValue);
-        });
-
-        collectionEventSource.addEventListener('collection:update', (event) => {
-            const parsedData = JSON.parse(
-                (event as MessageEvent).data
-            ) as Marketplace.Set.Events.CollectionUpdate;
-            const currentValue = this._elementSetSubscriptions
-                .get(setEntityId)
-                ?.getValue();
-            if (!currentValue) return;
-            const newValue = {
-                ...currentValue,
-                collection: parsedData.data,
-            };
-            this._elementSetSubscriptions.get(setEntityId)?.next(newValue);
-        });
-
-        const firstValue = this._elementSetSubscriptions.get(setEntityId)?.getValue();
+        };
+        const firstValue = this._elementSetSubscriptions
+            .get(setEntityId)
+            ?.getValue();
         if (firstValue) {
             callback(firstValue);
         }
@@ -208,9 +238,11 @@ export class CollectionService {
         this._elementSets.set(data.result);
     }
 
-    public async getCollectionByEntityId(entityId: Marketplace.Set.EntityId) {
+    public async getLatestCollectionVersionByEntityId(
+        entityId: Marketplace.Set.EntityId
+    ) {
         const data = await lastValueFrom(
-            this.httpClient.get<typeof Marketplace.Set.GetByVersionId.Response>(
+            this.httpClient.get<typeof Marketplace.Set.GetByEntityId.Response>(
                 `${this.ENDPOINT}/${entityId}`
             )
         );
@@ -390,5 +422,88 @@ export class CollectionService {
                     : set
             )
         );
+    }
+
+    public async getElementsOfCollectionVersion(
+        collection: VersionedCollectionPartial
+    ) {
+        const data = await lastValueFrom(
+            this.httpClient.get<
+                typeof Marketplace.Set.GetElementsOfCollectionVersion.Response
+            >(
+                `${this.ENDPOINT}/${collection.entityId}/version/${collection.versionId}/elements`
+            )
+        );
+
+        const typedData =
+            Marketplace.Set.GetElementsOfCollectionVersion.responseSchema.parse(
+                data
+            );
+
+        return typedData;
+    }
+
+    public async getCollectionByVersionId(
+        collection: VersionedCollectionPartial
+    ) {
+        const data = await lastValueFrom(
+            this.httpClient.get<
+                typeof Marketplace.Set.GetCollectionVersion.Response
+            >(
+                `${this.ENDPOINT}/${collection.entityId}/version/${collection.versionId}`
+            )
+        );
+
+        const typedData =
+            Marketplace.Set.GetCollectionVersion.responseSchema.parse(data);
+
+        return typedData.result;
+    }
+
+    public async checkNewerVersionAvailable(
+        collection: VersionedCollectionPartial
+    ): Promise<
+        | { newerVersionAvailable: false }
+        | {
+              newerVersionAvailable: true;
+              latestVersion: VersionedCollectionPartial;
+          }
+    > {
+        const latestCollection =
+            await this.getLatestCollectionVersionByEntityId(
+                collection.entityId
+            );
+        const currentCollection =
+            await this.getCollectionByVersionId(collection);
+
+        if (latestCollection.version < currentCollection.version) {
+            console.error(
+                `Current collection version ${collection.versionId} is newer than latest collection version ${latestCollection.versionId}`
+            );
+        }
+
+        if (latestCollection.version === currentCollection.version) {
+            return { newerVersionAvailable: false };
+        } else {
+            return {
+                newerVersionAvailable: true,
+                latestVersion: {
+                    versionId: latestCollection.versionId,
+                    entityId: latestCollection.entityId,
+                },
+            };
+        }
+    }
+
+    public async getMyCollections(includeDraftState: boolean = true) {
+        const data = await lastValueFrom(
+            this.httpClient.get<typeof Marketplace.Set.LoadMy.Response>(
+                `${this.ENDPOINT}/my?includeDraftState=${includeDraftState}`
+            )
+        );
+
+        const typedData = Marketplace.Set.LoadMy.responseSchema.parse(data);
+
+        return typedData.result;
     }
 }

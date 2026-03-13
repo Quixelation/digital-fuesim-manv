@@ -1,7 +1,9 @@
 import type {
     ActionId,
     ExerciseAction,
+    ExerciseId,
     ExerciseState,
+    ExerciseTemplateId,
     Marketplace,
     ParticipantKey,
     TrainerKey,
@@ -31,19 +33,6 @@ const defaultUUID = <T = string>() =>
     typedUUID<T>().default(sql`uuid_generate_v4()`);
 const defaultPrefixedUUID = (prefix: string) =>
     varchar().$defaultFn(() => `${prefix}_${crypto.randomUUID()}`);
-
-export type ActionId = z.infer<typeof actionIdSchema>;
-export type ExerciseTemplateId = z.infer<typeof exerciseTemplateIdSchema>;
-export type ExerciseId = z.infer<typeof exerciseIdSchema>;
-
-const actionIdSchema = z.uuidv4().brand<'ActionId'>();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-    .brand<'ExerciseTemplateId'>();
-    .uuidv4()
-export const exerciseTemplateIdSchema = z
-
-const exerciseIdSchema = z.uuidv4().brand<'ExerciseId'>();
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 
 const baseTable = <T>() => ({
     id: defaultUUID<T>().primaryKey().notNull(),

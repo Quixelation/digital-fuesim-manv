@@ -1,7 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SharedModule } from 'src/app/shared/shared.module';
 import { MarketplaceComponent } from './marketplace/marketplace.component';
 import {
     NgbDropdown,
@@ -19,6 +18,7 @@ import { AlarmgroupElementModalComponent } from './editor-modals/alarmgroup-elem
 import { VersionedElementModalComponent } from './editor-modals/versioned-element-modal/versioned-element-modal.component';
 import { DependingObjectModalComponent } from './editor-modals/depending-object-modal/depending-object-modal.component';
 import { VehicleTemplateFormMarketplaceComponent } from './editor-modals/vehicle-template-form/vehicle-template-form.component';
+import { SharedModule } from '../../shared/shared.module';
 
 @NgModule({
     declarations: [

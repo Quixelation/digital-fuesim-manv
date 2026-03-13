@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
-import { Subject } from 'rxjs';
+import { interval, Subject, takeUntil } from 'rxjs';
 
 export class SSE {
+    public HEARTBEAT_INTERVAL = 10_000; // 10 seconds
+
     constructor(
         private req: Request,
         private res: Response
@@ -9,6 +11,13 @@ export class SSE {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+
+
+        interval(this.HEARTBEAT_INTERVAL)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                this.sendEvent('heartbeat', { timestamp: Date.now() });
+            })
 
         req.on('close', () => {
             this._destroy$.next();
