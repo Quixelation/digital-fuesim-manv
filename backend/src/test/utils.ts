@@ -158,12 +158,13 @@ export class TestEnvironment {
         return this._actionRepository;
     }
 
-    public httpRequest(
+    public httpRequest<TData extends (string | object)>(
         method: HttpMethod,
         url: string,
-        session?: string
+        session?: string,
+        data?: TData
     ): request.Test {
-        const req = request(this.server.httpServer.httpServer)[method](url);
+        const req = request(this.server.httpServer.httpServer)[method](url).send(data);
         if (session) {
             req.set(
                 'Cookie',

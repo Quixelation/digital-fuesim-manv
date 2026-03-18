@@ -6,7 +6,6 @@ import { Subject, takeUntil } from 'rxjs';
 
 @Component({
     selector: 'app-marketplace-layout',
-    standalone: false,
     templateUrl: './marketplace-layout.component.html',
     styleUrl: './marketplace-layout.component.scss',
 })

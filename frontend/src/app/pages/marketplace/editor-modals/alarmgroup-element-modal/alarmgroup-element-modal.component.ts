@@ -15,7 +15,6 @@ interface EditableAlarmgroupTemplateValues {
 
 @Component({
     selector: 'app-alarmgroup-element-modal',
-    standalone: false,
     templateUrl: './alarmgroup-element-modal.component.html',
     styleUrl: './alarmgroup-element-modal.component.scss',
 })

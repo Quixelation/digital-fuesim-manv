@@ -1,22 +1,39 @@
-import { Marketplace } from 'fuesim-digital-shared';
-import { DatabaseConnection } from './database-service.js';
-import { ExerciseRepository } from '../repositories/exercise-repository.js';
-import { CollectionRepository } from '../repositories/collection-repository.js';
-import { z } from 'zod';
+import type { Marketplace } from 'fuesim-digital-shared';
+import type { z } from 'zod';
 import { Subject } from 'rxjs';
+import type { CollectionRepository } from '../repositories/collection-repository.js';
 
 export class CollectionService {
     public get events() {
         return this.eventSubject.asObservable();
     }
 
-    private eventSubject = new Subject<
+    private readonly eventSubject = new Subject<
         typeof Marketplace.Set.Events.Event.Type
     >();
 
+    private readonly newDeferredEventBuffer = () => {
+        // I opted against a ReplaySubject here to not worry about completing correctly if a functions throws
+        // and doesnt complete this subject
+        const subject: (typeof Marketplace.Set.Events.Event.Type)[] = [];
+
+        return {
+            next: (event: typeof Marketplace.Set.Events.Event.Type) => {
+                subject.push(event);
+            },
+            flush: () => {
+                const eventsToFlush = [...subject];
+                subject.length = 0;
+                for (const event of eventsToFlush) {
+                    this.eventSubject.next(event);
+                }
+            },
+        };
+    };
+
     private exists<T>(
         elementName: string,
-        element: T | undefined | null
+        element: T | null | undefined
     ): NonNullable<T> {
         if (!element) {
             throw new Error(`No ${elementName} found`);
@@ -24,10 +41,10 @@ export class CollectionService {
         return element;
     }
 
-    constructor(private exerciseElementSetRepository: CollectionRepository) {}
+    constructor(private readonly collectionRepository: CollectionRepository) { }
 
     public async createExerciseSet(name: string, owner: string) {
-        return this.exerciseElementSetRepository.createFirstCollectionVersion(
+        return this.collectionRepository.createFirstCollectionVersion(
             name,
             owner
         );
@@ -37,21 +54,22 @@ export class CollectionService {
         removeFrom: Marketplace.Set.EntityId;
         dependencyEntityId: Marketplace.Set.VersionId;
     }) {
-        return this.exerciseElementSetRepository.transaction(async (tx) => {
-            const draftState = await tx.getOrCreateDraftState(data.removeFrom);
+        return this.collectionRepository.transaction(async (tx) => {
+            const [draftState, createdNewDraftState] =
+                await tx.getOrCreateDraftState(data.removeFrom);
 
             await tx.removeCollectionVersionDependency(
                 draftState.versionId,
                 data.dependencyEntityId
             );
 
-            this.eventSubject.next({
-                event: 'version:switch',
-                data: {
-                    newVersionId: draftState.versionId,
-                },
-                collectionEntityId: data.removeFrom,
-            });
+            if (createdNewDraftState) {
+                this.eventSubject.next({
+                    event: 'collection:update',
+                    data: draftState,
+                    collectionEntityId: data.removeFrom,
+                });
+            }
 
             return draftState;
         });
@@ -59,24 +77,12 @@ export class CollectionService {
 
     public async saveDraftState(collectionEntityId: Marketplace.Set.EntityId) {
         const data =
-            await this.exerciseElementSetRepository.saveDraftState(
-                collectionEntityId
-            );
+            await this.collectionRepository.saveDraftState(collectionEntityId);
 
         this.eventSubject.next({
             event: 'collection:update',
-            data: {
-                entityId: data.entityId,
-                versionId: data.versionId,
-                version: data.version,
-                title: data.title,
-                owner: data.owner,
-                createdAt: data.createdAt.toISOString(),
-                stateVersion: data.stateVersion,
-                visibility: data.visibility,
-                draftState: data.draftState,
-            },
-            collectionEntityId: collectionEntityId,
+            data,
+            collectionEntityId,
         });
 
         return data;
@@ -90,16 +96,21 @@ export class CollectionService {
         opts: { throwOnDraftState: boolean }
     ) {
         const { throwOnDraftState } = opts;
-        return this.exerciseElementSetRepository.transaction(async (tx) => {
-            const latestDependentCollectionVersion = this.exists(
+        return this.collectionRepository.transaction(async (tx) => {
+            const eventBuffer = this.newDeferredEventBuffer();
+            const [draftState, createdNewDraftState] = this.exists(
                 'set version',
                 await tx.getOrCreateDraftState(data.importTo)
             );
 
+            eventBuffer.next({
+                event: 'collection:update',
+                data: draftState,
+                collectionEntityId: data.importTo,
+            });
+
             const existingDependencies =
-                await tx.getCollectionVersionDependencies(
-                    latestDependentCollectionVersion.versionId
-                );
+                await tx.getCollectionVersionDependencies(draftState.versionId);
 
             if (existingDependencies.length > 1) {
                 console.error(
@@ -120,7 +131,7 @@ export class CollectionService {
                 );
             }
 
-            if (importFromCollection.draftState === true) {
+            if (importFromCollection.draftState) {
                 if (throwOnDraftState) {
                     throw new Error(
                         `Collection version with id ${data.importFrom} is in draft state and can not be imported`
@@ -141,7 +152,7 @@ export class CollectionService {
             }
 
             await tx.addCollectionVersionDependency(
-                latestDependentCollectionVersion.versionId,
+                draftState.versionId,
                 data.importFrom
             );
 
@@ -150,19 +161,13 @@ export class CollectionService {
                 await tx.getElementsOfCollectionVersion(data.importFrom)
             );
 
-            this.eventSubject.next({
-                event: 'version:switch',
-                data: {
-                    newVersionId: latestDependentCollectionVersion.versionId,
-                },
-                collectionEntityId: data.importTo,
-            });
-
-            this.eventSubject.next({
+            eventBuffer.next({
                 event: 'dependency:add',
                 data: data.importFrom,
                 collectionEntityId: data.importTo,
             });
+
+            eventBuffer.flush();
 
             return {
                 collection: importFromCollection,
@@ -175,47 +180,46 @@ export class CollectionService {
         setEntityId: Marketplace.Set.EntityId,
         content: Marketplace.ExerciseElementObjectUnion
     ) {
-        return this.exerciseElementSetRepository.transaction(async (tx) => {
-            const result = await tx.createElementVersion({
-                version: 1,
-                content,
+        return this.collectionRepository.transaction(async (tx) => {
+            const eventBuffer = this.newDeferredEventBuffer();
+
+            const result = this.exists(
+                'new element',
+                await tx.createElementVersion({
+                    version: 1,
+                    content,
+                })
+            );
+
+            eventBuffer.next({
+                event: 'element:create',
+                data: result,
+                collectionEntityId: setEntityId,
             });
 
             if (!result) {
                 throw new Error('Failed to create exercise element object');
             }
 
-            const newSetVersion = await tx.getOrCreateDraftState(setEntityId);
+            const [draftState, createdNewDraftState] =
+                await tx.getOrCreateDraftState(setEntityId);
+            if (createdNewDraftState) {
+                eventBuffer.next({
+                    event: 'collection:update',
+                    data: draftState,
+                    collectionEntityId: setEntityId,
+                });
+            }
 
             await tx.addElementToCollection(
                 result.versionId,
-                newSetVersion.versionId
+                draftState.versionId
             );
 
-            this.eventSubject.next({
-                event: 'version:switch',
-                data: {
-                    newVersionId: newSetVersion.versionId,
-                },
-                collectionEntityId: setEntityId,
-            });
-
-            this.eventSubject.next({
-                event: 'element:create',
-                data: {
-                    versionId: result.versionId,
-                    entityId: result.entityId,
-                    version: result.version,
-                    content: result.content,
-                    stateVersion: result.stateVersion,
-                    createdAt: result.createdAt.toISOString(),
-                    title: result.title,
-                },
-                collectionEntityId: setEntityId,
-            });
+            eventBuffer.flush();
 
             return {
-                newSetVersionId: newSetVersion.versionId,
+                newSetVersionId: draftState.versionId,
                 result,
             };
         });
@@ -225,18 +229,16 @@ export class CollectionService {
         userId: string,
         opts: { includeDraftState: boolean }
     ) {
-        return this.exerciseElementSetRepository.getLatestCollectionForUser(
-            userId,
-            { allowDraftState: opts.includeDraftState }
-        );
+        return this.collectionRepository.getLatestCollectionForUser(userId, {
+            allowDraftState: opts.includeDraftState,
+        });
     }
 
     public async getLatestCollectionById(
         setEntityId: Marketplace.Set.EntityId,
         opts: { draftState: boolean }
-    ) {
-        console.log(opts);
-        return this.exerciseElementSetRepository.getLatestCollectionByEntityId(
+    ): Promise<Marketplace.Set.Dto | null> {
+        return this.collectionRepository.getLatestCollectionByEntityId(
             setEntityId,
             { allowDraftState: opts.draftState }
         );
@@ -245,7 +247,7 @@ export class CollectionService {
     public async getCollectionVersionById(
         collectionVersionId: Marketplace.Set.VersionId
     ) {
-        return this.exerciseElementSetRepository.getCollectionByVersionId(
+        return this.collectionRepository.getCollectionByVersionId(
             collectionVersionId
         );
     }
@@ -254,7 +256,7 @@ export class CollectionService {
         collectionVersionId: Marketplace.Set.VersionId
     ) {
         return (
-            await this.exerciseElementSetRepository.getCollectionVersionDependencies(
+            await this.collectionRepository.getCollectionVersionDependencies(
                 collectionVersionId
             )
         ).map((dependency) => ({
@@ -269,7 +271,7 @@ export class CollectionService {
     ) {
         const latestConnection = this.exists(
             'latestCollection',
-            await this.exerciseElementSetRepository.getLatestCollectionByEntityId(
+            await this.collectionRepository.getLatestCollectionByEntityId(
                 entity,
                 { allowDraftState: true }
             )
@@ -300,7 +302,7 @@ export class CollectionService {
         visited.add(collectionVersionId);
 
         const deps =
-            await this.exerciseElementSetRepository.getCollectionVersionDependencies(
+            await this.collectionRepository.getCollectionVersionDependencies(
                 collectionVersionId
             );
 
@@ -323,39 +325,43 @@ export class CollectionService {
             includeDependencies?: boolean;
             allowDraftState: boolean;
         }
-    ) {
+    ): Promise<{
+        direct: Marketplace.Element.Dto[];
+        transitive?: z.infer<
+            typeof Marketplace.Set.transitiveCollectionSchema
+        >[];
+    }> {
         const { includeDependencies: Opt_includeDependencies } = opts || {
             includeDependencies: false,
         };
 
         const baseCollection = this.exists(
             'collection for version',
-            await this.exerciseElementSetRepository.getCollectionByVersionId(
+            await this.collectionRepository.getCollectionByVersionId(
                 collectionVersionId
             )
-        )
+        );
 
-        if(baseCollection.draftState === true && opts.allowDraftState === false) {
-            throw new Error('Collection version is in draft state and allowDraftState is set to false');
+        if (baseCollection.draftState && !opts.allowDraftState) {
+            throw new Error(
+                'Collection version is in draft state and allowDraftState is set to false'
+            );
         }
 
-        console.log(opts);
         const directCollectionElements =
-            await this.exerciseElementSetRepository.getElementsOfCollectionVersion(
+            await this.collectionRepository.getElementsOfCollectionVersion(
                 collectionVersionId
             );
 
         if (Opt_includeDependencies === false) {
             return { direct: directCollectionElements };
         }
-        console.log('latestSetVersion', collectionVersionId);
         const dependentCollectionVersions =
             await this.getFullFlatDependencyTree(collectionVersionId);
 
-        console.log('dependentCollectionVersions', dependentCollectionVersions);
 
         const dependentCollectionElements = await Promise.all(
-            dependentCollectionVersions.map((dependency) =>
+            dependentCollectionVersions.map(async (dependency) =>
                 Promise.all([
                     this.exists(
                         'collection for dependency',
@@ -365,7 +371,7 @@ export class CollectionService {
                     ),
                     this.exists(
                         'elements for collection-dependency',
-                        this.exerciseElementSetRepository.getElementsOfCollectionVersion(
+                        this.collectionRepository.getElementsOfCollectionVersion(
                             dependency.collectionVersionId
                         )
                     ),
@@ -376,27 +382,8 @@ export class CollectionService {
         const dependencies = dependentCollectionElements.map(
             ([collection, elements]) =>
                 ({
-                    collection: {
-                        draftState: collection!.draftState,
-                        title: collection!.title,
-                        entityId: collection!.entityId,
-                        createdAt: collection!.createdAt.toISOString(),
-                        owner: collection!.owner,
-                        stateVersion: collection!.stateVersion,
-                        version: collection!.version,
-                        versionId: collection!.versionId,
-                        visibility: collection!.visibility,
-                    },
-                    elements: elements.map((element) => ({
-                        versionId: element.versionId,
-                        entityId: element.entityId,
-                        version: element.version,
-                        content:
-                            element.content as Marketplace.ExerciseElementObjectUnion,
-                        stateVersion: element.stateVersion,
-                        createdAt: element.createdAt.toISOString(),
-                        title: element.title,
-                    })),
+                    collection: collection!,
+                    elements,
                 }) satisfies z.infer<
                     typeof Marketplace.Set.GetLatestElementsBySetVersionId.responseSchema.shape.transitive.element
                 >
@@ -410,142 +397,157 @@ export class CollectionService {
 
     public async deleteExerciseElementObjectFromSet(
         elementEntityId: Marketplace.Element.EntityId
-    ) {
-        return await this.exerciseElementSetRepository.transaction(
-            async (tx) => {
-                const containingSet = this.exists(
-                    'containing set',
-                    await tx.getLatestCollectionOfElementEntity(elementEntityId)
-                );
+    ): Promise<Marketplace.Set.Dto> {
+        return this.collectionRepository.transaction(async (tx) => {
+            const containingSet = this.exists(
+                'containing set',
+                await tx.getLatestCollectionOfElementEntity(elementEntityId)
+            );
 
-                const newSet = await tx.getOrCreateDraftState(
-                    containingSet.entityId
-                );
+            const [draftState, createdNewDraftState] =
+                await tx.getOrCreateDraftState(containingSet.entityId);
 
-                await tx.removeElementFromCollection(
-                    elementEntityId,
-                    newSet.versionId
-                );
+            await tx.unmapElementFromCollection(
+                elementEntityId,
+                draftState.versionId
+            );
 
+            if (createdNewDraftState) {
                 this.eventSubject.next({
-                    event: 'version:switch',
-                    data: {
-                        newVersionId: newSet.versionId,
-                    },
+                    event: 'collection:update',
+                    data: draftState,
                     collectionEntityId: containingSet.entityId,
                 });
-
-                this.eventSubject.next({
-                    event: 'element:delete',
-                    data: {
-                        entityId: elementEntityId,
-                    },
-                    collectionEntityId: containingSet.entityId,
-                });
-
-                return newSet;
             }
-        );
+
+            this.eventSubject.next({
+                event: 'element:delete',
+                data: {
+                    entityId: elementEntityId,
+                },
+                collectionEntityId: containingSet.entityId,
+            });
+
+            return draftState;
+        });
     }
 
     public async deleteExerciseElementSet(
         setEntityId: Marketplace.Set.EntityId
     ) {
-        //TODO: @Quixelation - forbid, if set is public, and do some other checks
-        return;
+        // TODO: @Quixelation - forbid, if set is public, and do some other checks
     }
 
     public async getExerciseElementObjectVersions(
         entityId: Marketplace.Element.EntityId
     ) {
-        return this.exerciseElementSetRepository.getElementVersions(entityId);
+        return this.collectionRepository.getElementVersions(entityId);
     }
 
     public async updateExerciseElementObject(
         entityId: Marketplace.Element.EntityId,
         content: Marketplace.ExerciseElementObjectUnion
     ) {
-        return this.exerciseElementSetRepository.transaction(async (tx) => {
-            const latestObject = this.exists(
-                'latest exercise element',
-                await tx.getLatestElementVersion(entityId)
-            );
+        return this.collectionRepository.transaction(async (tx) => {
+            const eventBuffer = this.newDeferredEventBuffer();
 
             const latestContainingSet = this.exists(
                 'element set',
                 await tx.getLatestCollectionOfElementEntity(entityId)
             );
+            const latestVersionOfContainingSet =
+                await tx.getLatestCollectionByEntityId(
+                    latestContainingSet.entityId,
+                    { allowDraftState: true }
+                );
 
-            const newElementVersion = this.exists(
-                'new exercise element',
-                await tx.createElementVersion({
-                    content,
-                    version: latestObject.version + 1,
-                    entityId,
-                })
+            if (
+                latestVersionOfContainingSet?.versionId !==
+                latestContainingSet.versionId
+            ) {
+                throw new Error(
+                    `Element with id ${entityId} does not exist in the latest version of the containing collection and can therefore not be updated.`
+                );
+            }
+
+            const [draftState, createdNewDraftState] =
+                await tx.getOrCreateDraftState(latestContainingSet.entityId);
+            if (createdNewDraftState) {
+                eventBuffer.next({
+                    event: 'collection:update',
+                    data: draftState,
+                    collectionEntityId: latestContainingSet.entityId,
+                });
+            }
+
+            const latestElementVersion = this.exists(
+                'latest exercise element',
+                await tx.getLatestElementVersion(entityId)
             );
 
-            const newSetVersion = await tx.getOrCreateDraftState(
-                latestContainingSet.entityId
+            let newElementVersion: Marketplace.Element.Dto;
+
+            const elementMapping = await tx.getElementCollectionMapping(
+                latestElementVersion.versionId,
+                latestContainingSet.versionId
             );
+            if (elementMapping.isBaseReference === true) {
+                // just overwrite the already mapped element
+                newElementVersion = this.exists(
+                    'updated element',
+                    await this.collectionRepository.updateElementContent(
+                        latestElementVersion.versionId,
+                        content
+                    )
+                );
+            } else {
+                // we just have a secondary reference
+                // we need to create a new copy of the element
+                // and switch the reference from the old element to the new one in the collection mapping
 
-            await tx.addElementToCollection(
-                newElementVersion.versionId,
-                newSetVersion.versionId
-            );
+                newElementVersion = this.exists(
+                    'new exercise element',
+                    await tx.createElementVersion({
+                        content,
+                        version: latestElementVersion.version + 1,
+                        entityId,
+                    })
+                );
 
-            this.eventSubject.next({
-                event: 'version:switch',
-                data: {
-                    newVersionId: newSetVersion.versionId,
-                },
-                collectionEntityId: latestContainingSet.entityId,
-            });
+                // This function automatically unmaps the old reference
+                // we dont need to care about removing the old element from the collection,
+                // because it is not mapped as base reference and therefore
+                // belongs to a different collection version
+                await tx.addElementToCollection(
+                    newElementVersion.versionId,
+                    draftState.versionId
+                );
+            }
 
-            this.eventSubject.next({
+            eventBuffer.next({
                 event: 'element:update',
-                data: {
-                    entityId: entityId,
-                    versionId: newElementVersion.versionId,
-                    version: newElementVersion.version,
-                    content:
-                        newElementVersion.content as Marketplace.ExerciseElementObjectUnion,
-                    stateVersion: newElementVersion.stateVersion,
-                    createdAt: newElementVersion.createdAt.toISOString(),
-                    title: newElementVersion.title,
-                },
+                data: newElementVersion,
                 collectionEntityId: latestContainingSet.entityId,
             });
+
+            eventBuffer.flush();
 
             return {
-                newSetVersionId: newSetVersion.versionId,
+                newSetVersionId: draftState.versionId,
                 newElement: newElementVersion,
             };
         });
     }
 
-    public async makeCollectionPublic(
-        setEntityId: Marketplace.Set.EntityId,
-    ) {
-        const data =
-            await this.exerciseElementSetRepository.setCollectionVisibility(
-                setEntityId,
-                "public"
-            );
+    public async makeCollectionPublic(setEntityId: Marketplace.Set.EntityId) {
+        const data = await this.collectionRepository.setCollectionVisibility(
+            setEntityId,
+            'public'
+        );
 
         this.eventSubject.next({
             event: 'collection:update',
-            data: {
-                entityId: data.entityId,
-                versionId: data.versionId,
-                version: data.version,
-                title: data.title,
-                owner: data.owner,
-                createdAt: data.createdAt.toISOString(),
-                stateVersion: data.stateVersion,
-                visibility: data.visibility,
-                draftState: data.draftState,
-            },
+            data,
             collectionEntityId: setEntityId,
         });
 
@@ -556,8 +558,9 @@ export class CollectionService {
         setVersionId: Marketplace.Set.VersionId,
         owner: string
     ) {
+        console.log("Starting Duplic")
         const latestSetEntity =
-            await this.exerciseElementSetRepository.getCollectionByVersionId(
+            await this.collectionRepository.getCollectionByVersionId(
                 setVersionId
             );
 
@@ -568,23 +571,24 @@ export class CollectionService {
         }
 
         const newSet =
-            await this.exerciseElementSetRepository.createFirstCollectionVersion(
-                //TODO: Quixelation : also duplicate description (visbility should stay private)
-                'Kopie von ' + latestSetEntity.title,
-                owner
+            await this.collectionRepository.createFirstCollectionVersion(
+                // TODO: Quixelation : also duplicate description (visbility should stay private)
+                `Kopie von ${latestSetEntity.title}`,
+                owner,
+                true
             );
 
         if (!newSet) {
             throw new Error('Failed to create new exercise element set');
         }
 
-        await this.exerciseElementSetRepository.copyElementsBetweenCollections(
-            {
+        await this.collectionRepository.copyElementsBetweenCollections({
+            source: {
                 versionId: setVersionId,
                 entityId: latestSetEntity.entityId,
             },
-            newSet
-        );
+            target: newSet
+        });
 
         return newSet;
     }
@@ -613,7 +617,7 @@ export class CollectionService {
                 )
         );
 
-        //TODO: Replace with groupBy once available with new tsconfig target
+        // TODO: Replace with groupBy once available with new tsconfig target
         const overlappingDependencyEntities = overlappingDependencies.reduce<
             Record<
                 Marketplace.Set.EntityId,
@@ -647,7 +651,7 @@ export class CollectionService {
                         versions[0]!.collectionVersionId
                 )
             ) {
-                //TODO: Return accepted
+                // TODO: Return accepted
                 return;
             }
 
@@ -656,7 +660,7 @@ export class CollectionService {
                 versions.map((version) => async () => {
                     const element = this.exists(
                         'dependency element',
-                        await this.exerciseElementSetRepository.getCollectionByVersionId(
+                        await this.collectionRepository.getCollectionByVersionId(
                             version.collectionVersionId
                         )
                     );
@@ -667,7 +671,7 @@ export class CollectionService {
         }
     }
 
-    private findEntityVersionsInContent(content: object | any[]): string[] {
+    private findEntityVersionsInContent(content: any[] | object): string[] {
         const elementEntityVersionId = new RegExp(
             /^element_version_[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/iu
         );

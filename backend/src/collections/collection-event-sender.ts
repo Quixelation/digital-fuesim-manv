@@ -143,31 +143,10 @@ export class CollectionEventSender {
                 collectionEntityId: this.collectionEntityId,
                 event: 'initialdata',
                 data: {
-                    collection: {
-                        title: latestCollection.title,
-                        createdAt: latestCollection.createdAt.toISOString(),
-                        entityId: latestCollection.entityId,
-                        owner: latestCollection.owner,
-                        stateVersion: latestCollection.stateVersion,
-                        version: latestCollection.version,
-                        versionId: latestCollection.versionId,
-                        visibility: latestCollection.visibility,
-                        draftState: latestCollection.draftState,
-                    },
+                    collection: latestCollection,
                     elements: {
-                        //TODO: @Quixelation
-                        //@ts-expect-error - We need to check this in the service layer
-                        transitive: data.transitive,
-                        //TODO: @Quixelation
-                        direct: data.direct.map((element) => ({
-                            content: element.content,
-                            createdAt: element.createdAt.toISOString(),
-                            entityId: element.entityId,
-                            stateVersion: element.stateVersion,
-                            title: element.title,
-                            version: element.version,
-                            versionId: element.versionId,
-                        })),
+                        transitive: data.transitive ?? [],
+                        direct: data.direct,
                     },
                 },
             }) as typeof Marketplace.Set.Events.InitialData.Type

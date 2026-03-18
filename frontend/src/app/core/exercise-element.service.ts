@@ -3,6 +3,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { Marketplace, VersionedCollectionPartial } from 'fuesim-digital-shared';
 import { BehaviorSubject, lastValueFrom } from 'rxjs';
 import { httpOrigin } from './api-origins';
+import { MessageService } from './messages/message.service';
 
 export type ExerciseElementSetSubscriptionData = {
     collection: Marketplace.Set.Dto;
@@ -14,6 +15,7 @@ export type ExerciseElementSetSubscriptionData = {
 })
 export class CollectionService {
     private readonly httpClient = inject(HttpClient);
+    private readonly messageService = inject(MessageService);
 
     public readonly ENDPOINT = httpOrigin + '/api/collections';
     private _elementSets = signal<Marketplace.Set.Dto[]>([]);
@@ -158,24 +160,6 @@ export class CollectionService {
                         ?.next(newValue);
                     break;
                 }
-                case 'version:switch': {
-                    const currentValue = this._elementSetSubscriptions
-                        .get(setEntityId)
-                        ?.getValue();
-                    if (!currentValue) return;
-                    const newValue = {
-                        ...currentValue,
-                        collection: {
-                            ...currentValue.collection,
-                            versionId: changeEvent.data.newVersionId,
-                        },
-                    };
-
-                    this._elementSetSubscriptions
-                        .get(setEntityId)
-                        ?.next(newValue);
-                    break;
-                }
 
                 case 'collection:update': {
                     const currentValue = this._elementSetSubscriptions
@@ -204,6 +188,10 @@ export class CollectionService {
                 `Error in EventSource for setEntityId ${setEntityId}:`,
                 error
             );
+            this.messageService.postError({
+                title: 'Verbindungsfehler',
+                body: "Die Verbindung zum Server wurde unterbrochen. Bitte überprüfen Sie Ihre Internetverbindung und laden Sie die Seite neu.",
+            });
         };
         const firstValue = this._elementSetSubscriptions
             .get(setEntityId)
@@ -370,9 +358,11 @@ export class CollectionService {
             )
         );
 
+        const parsedData = Marketplace.Set.Duplicate.responseSchema.parse(data);
+
         this._elementSets.update((elementSets) => [
             ...elementSets,
-            data.createdSet,
+            parsedData.createdSet,
         ]);
     }
     public async deleteCollection(setEntityId: Marketplace.Set.EntityId) {
@@ -415,10 +405,17 @@ export class CollectionService {
             >(`${this.ENDPOINT}/${collectionEntityId}/save`, {})
         );
 
+        const parsedData = Marketplace.Set.SaveDraftState.responseSchema.parse(data);
+
+        if(parsedData.saved === false || parsedData.result === null) {
+            this.messageService.postError({title: "Sammlung konnte nicht gespeichert werden", body: "Probieren Sie es erneut oder laden Sie die Seite neu."})
+            return;
+        }
+
         this._elementSets.update((elementSets) =>
             elementSets.map((set) =>
                 set.entityId === collectionEntityId
-                    ? { ...set, draftState: data.result.draftState }
+                    ? { ...set, draftState: data.result!.draftState }
                     : set
             )
         );

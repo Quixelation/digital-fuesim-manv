@@ -3,7 +3,6 @@ import { CollectionService } from '../../../core/exercise-element.service';
 
 @Component({
     selector: 'app-marketplace',
-    standalone: false,
     templateUrl: './marketplace.component.html',
     styleUrl: './marketplace.component.scss',
 })

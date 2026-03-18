@@ -140,9 +140,11 @@
                 exerciseObject of selectedSetData()!.objects.direct;
                 track exerciseObject.versionId
             ) {
+                <app-element-card [element]="exerciseObject"/>
+
                 @switch (exerciseObject.content.type) {
                     @case ('vehicleTemplate') {
-                        <app-map-editor-card
+                        <!-- <app-map-editor-card
                             [imageUrl]="exerciseObject.content.image.url"
                             [title]="exerciseObject.title"
                             [enableDeleteButton]="true"
@@ -151,7 +153,7 @@
                                 deleteExerciseObject(exerciseObject.entityId)
                             "
                             (elementEdit)="editVehicle(exerciseObject)"
-                        />
+                        /> -->
                     }
                     @case ('alarmGroup') {
                         {{ exerciseObject.title }} (Alarmgruppe)
@@ -181,9 +183,11 @@
                     exerciseObject of dependency.elements;
                     track exerciseObject.versionId
                 ) {
+                    <app-element-card [element]="exerciseObject"/>
+
                     @switch (exerciseObject.content.type) {
                         @case ('vehicleTemplate') {
-                            <app-map-editor-card
+                            <!-- <app-map-editor-card
                                 [imageUrl]="exerciseObject.content.image.url"
                                 [title]="exerciseObject.title"
                                 [enableDeleteButton]="true"
@@ -194,7 +198,7 @@
                                     )
                                 "
                                 (elementEdit)="editVehicle(exerciseObject)"
-                            />
+                            /> -->
                         }
 
                         @case ('alarmGroup') {

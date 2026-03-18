@@ -1,0 +1,6 @@
+DROP VIEW "public"."latest_exercise_element_templates";--> statement-breakpoint
+ALTER TABLE "exercise_element_templates" DROP CONSTRAINT "exercise_element_templates_baseCollectionVersion_exercise_element_sets_versionId_fk";
+--> statement-breakpoint
+ALTER TABLE "exercise_element_to_set_mapping" ADD COLUMN "isBaseReference" boolean DEFAULT false;--> statement-breakpoint
+ALTER TABLE "exercise_element_templates" DROP COLUMN "baseCollectionVersion";--> statement-breakpoint
+CREATE VIEW "public"."latest_exercise_element_templates" AS (select "exercise_element_templates"."versionId", "exercise_element_templates"."entityId", "exercise_element_templates"."version", "exercise_element_templates"."stateVersion", "exercise_element_templates"."createdBy", "exercise_element_templates"."createdAt", "exercise_element_templates"."title", "exercise_element_templates"."description", "exercise_element_templates"."content" from "exercise_element_templates" inner join "latest_exercise_element_template_version_numbers" on ("exercise_element_templates"."entityId" = "latest_exercise_element_template_version_numbers"."entityId" and "exercise_element_templates"."version" = "latestversion"));

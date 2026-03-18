@@ -1,54 +1,67 @@
 import { ExerciseState, Marketplace } from 'fuesim-digital-shared';
 import {
     collectionDependencyMappingTable,
-    elementTemplateToSetMappingTable,
-    exerciseElementSetTable,
-    exerciseElementTemplateTable,
-    latestExerciseElementTemplateView,
+    elementCollectionMappingTable,
+    collectionTable,
+    elementTable,
 } from '../schema.js';
 import { BaseRepository } from './base-repository.js';
 import { eq, desc, getTableColumns, sql, and, max } from 'drizzle-orm';
 
 export class CollectionRepository extends BaseRepository {
-    private latestCollectionNumbers(opts: { allowDraftState?: boolean }) {
+    private latestCollectionVersionNumbers(opts: { allowDraftState?: boolean }) {
         return this.databaseConnection.$with('latestSetVersionNumbersView').as(
             this.databaseConnection
                 .select({
-                    entityId: exerciseElementSetTable.entityId,
-                    latestversion: max(exerciseElementSetTable.version).as(
+                    entityId: collectionTable.entityId,
+                    latestversion: max(collectionTable.version).as(
                         'latestversion'
                     ),
                 })
-                .from(exerciseElementSetTable)
+                .from(collectionTable)
                 .where(
                     opts.allowDraftState !== true
-                        ? eq(exerciseElementSetTable.draftState, false)
+                        ? eq(collectionTable.draftState, false)
                         : sql`true`
                 )
-                .groupBy(exerciseElementSetTable.entityId)
+                .groupBy(collectionTable.entityId)
         );
     }
 
+    private latestElementVersionNumbers() {
+        return this.databaseConnection.$with('latest_exercise_element_template_version_numbers').as(
+            this.databaseConnection
+                .select({
+                    entityId: elementTable.entityId,
+                    latestversion: max(elementTable.version).as(
+                        'latestversion'
+                    ),
+                })
+                .from(elementTable)
+                .groupBy(elementTable.entityId)
+        )
+    }
+
     private latestCollections(opts: { allowDraftState?: boolean }) {
-        console.log(opts);
-        const latestCollectionVersionNumbers = this.latestCollectionNumbers({
+
+        const latestCollectionVersionNumbers = this.latestCollectionVersionNumbers({
             allowDraftState: opts.allowDraftState,
         });
 
         return this.databaseConnection.$with('latestCollectionsView').as(
             this.databaseConnection
                 .with(latestCollectionVersionNumbers)
-                .select(getTableColumns(exerciseElementSetTable))
-                .from(exerciseElementSetTable)
+                .select(getTableColumns(collectionTable))
+                .from(collectionTable)
                 .innerJoin(
                     latestCollectionVersionNumbers,
                     and(
                         eq(
-                            exerciseElementSetTable.entityId,
+                            collectionTable.entityId,
                             latestCollectionVersionNumbers.entityId
                         ),
                         eq(
-                            exerciseElementSetTable.version,
+                            collectionTable.version,
                             latestCollectionVersionNumbers.latestversion
                         )
                     )
@@ -56,20 +69,46 @@ export class CollectionRepository extends BaseRepository {
         );
     }
 
+    private latestElements() {
+        const latestElementVersionNumbers = this.latestElementVersionNumbers();
+
+        return this.databaseConnection.$with('latest_exercise_element_templates')
+            .as(
+                this.databaseConnection
+                    .with(latestElementVersionNumbers)
+                    .select(getTableColumns(elementTable))
+                    .from(elementTable)
+                    .innerJoin(
+                        latestElementVersionNumbers,
+                        and(
+                            eq(
+                                elementTable.entityId,
+                                latestElementVersionNumbers.entityId
+                            ),
+                            eq(
+                                elementTable.version,
+                                latestElementVersionNumbers.latestversion
+                            )
+                        )
+                    )
+            )
+    }
+
     public async getOrCreateDraftState(
         collectionEntityId: Marketplace.Set.EntityId
-    ) {
+    ):
+        Promise<[Marketplace.Set.Dto, boolean]> {
         const result = this.onlySingle(
             await this.databaseConnection
                 .select()
-                .from(exerciseElementSetTable)
+                .from(collectionTable)
                 .where(
                     and(
                         eq(
-                            exerciseElementSetTable.entityId,
+                            collectionTable.entityId,
                             collectionEntityId
                         ),
-                        eq(exerciseElementSetTable.draftState, true)
+                        eq(collectionTable.draftState, true)
                     )
                 )
         );
@@ -81,7 +120,7 @@ export class CollectionRepository extends BaseRepository {
 
             const newCollection = this.onlySingleStrict(
                 await this.databaseConnection
-                    .insert(exerciseElementSetTable)
+                    .insert(collectionTable)
                     .values({
                         ...latestVersion,
                         versionId: undefined, // versionId will be generated by the database
@@ -102,10 +141,10 @@ export class CollectionRepository extends BaseRepository {
                 newCollection.versionId
             );
 
-            return newCollection;
+            return [newCollection, true];
         }
 
-        return this.strict(result);
+        return [this.strict(result), false];
     }
 
     public async getCollectionVersionDependencies(
@@ -113,17 +152,17 @@ export class CollectionRepository extends BaseRepository {
     ) {
         return await this.databaseConnection
             .select(getTableColumns(collectionDependencyMappingTable))
-            .from(exerciseElementSetTable)
+            .from(collectionTable)
             .innerJoin(
                 collectionDependencyMappingTable,
                 eq(
-                    exerciseElementSetTable.versionId,
+                    collectionTable.versionId,
                     collectionDependencyMappingTable.dependentCollectionVersionId
                 )
             )
             .where(
                 and(
-                    eq(exerciseElementSetTable.versionId, collectionVersionId),
+                    eq(collectionTable.versionId, collectionVersionId),
                     eq(
                         collectionDependencyMappingTable.dependentCollectionVersionId,
                         collectionVersionId
@@ -174,14 +213,49 @@ export class CollectionRepository extends BaseRepository {
             .returning();
     }
 
+    private async checkElementVersionEditable(elementVersionId: Marketplace.Element.VersionId) {
+        const mappings = await this.databaseConnection
+            .select()
+            .from(elementCollectionMappingTable)
+            .innerJoin(collectionTable,
+                eq(elementCollectionMappingTable.setVersionId, collectionTable.versionId)
+            )
+            .where(
+                eq(elementCollectionMappingTable.elementVersionId, elementVersionId)
+            );
+
+        return mappings.length > 0  // the elements needs to exist to be editable/updateable
+            && mappings.every(mapping => mapping.exercise_element_sets.draftState === true);
+    }
+
+    public async updateElementContent(elementVersionId: Marketplace.Element.VersionId, data: Marketplace.ExerciseElementObjectUnion) {
+        return await this.databaseConnection.transaction(async (tx) => {
+            const isEditable = await this.checkElementVersionEditable(elementVersionId);
+            if (!isEditable) {
+                throw new Error('Cannot edit element version that is part of a non-draft collection');
+            }
+
+            const result = await tx
+                .update(elementTable)
+                .set({
+                    content: data,
+                    title: data.name
+                })
+                .where(eq(elementTable.versionId, elementVersionId))
+                .returning();
+
+            return this.onlySingle(result);
+        });
+    }
+
     public async saveDraftState(collectionEntityId: Marketplace.Set.EntityId) {
         const result = await this.databaseConnection
-            .update(exerciseElementSetTable)
+            .update(collectionTable)
             .set({ draftState: false })
             .where(
                 and(
-                    eq(exerciseElementSetTable.entityId, collectionEntityId),
-                    eq(exerciseElementSetTable.draftState, true)
+                    eq(collectionTable.entityId, collectionEntityId),
+                    eq(collectionTable.draftState, true)
                 )
             )
             .returning();
@@ -189,15 +263,9 @@ export class CollectionRepository extends BaseRepository {
         return this.onlySingleStrict(result);
     }
 
-    public async createFirstCollectionVersion(title: string, owner: string) {
-        console.log(
-            'Creating exercise set with title:',
-            title,
-            'for owner:',
-            owner
-        );
+    public async createFirstCollectionVersion(title: string, owner: string, draftState: boolean = false) {
         const result = await this.databaseConnection
-            .insert(exerciseElementSetTable)
+            .insert(collectionTable)
             .values({
                 title,
                 description: '',
@@ -205,38 +273,13 @@ export class CollectionRepository extends BaseRepository {
                 version: 1,
                 owner,
                 visibility: 'private',
-                draftState: false,
+                draftState: draftState,
             })
             .returning();
 
         return this.onlySingle(result);
     }
 
-    /**
-     * @deprecated
-     * TODO: @Quixelation
-     */
-    public async createCollectionVersion(entityId: Marketplace.Set.EntityId) {
-        const latestVersion =
-            await this.getLatestCollectionByEntityId(entityId);
-
-        if (!latestVersion) {
-            throw new Error('no latest version found');
-        }
-
-        const newVersion = latestVersion.version + 1;
-
-        const result = await this.databaseConnection
-            .insert(exerciseElementSetTable)
-            .values({
-                ...latestVersion,
-                versionId: undefined, // versionId will be generated by the database
-                version: newVersion,
-            })
-            .returning();
-
-        return this.onlySingle(result);
-    }
 
     public async createElementVersion(data: {
         content: Marketplace.ExerciseElementObjectUnion;
@@ -244,7 +287,7 @@ export class CollectionRepository extends BaseRepository {
         entityId?: Marketplace.Element.EntityId;
     }) {
         const result = await this.databaseConnection
-            .insert(exerciseElementTemplateTable)
+            .insert(elementTable)
             .values({
                 version: data.version,
                 stateVersion: ExerciseState.currentStateVersion,
@@ -259,24 +302,26 @@ export class CollectionRepository extends BaseRepository {
         return this.onlySingle(result);
     }
 
+    public async getElementCollectionMapping(elementVersionId: Marketplace.Element.VersionId, collectionVersionId: Marketplace.Set.VersionId) {
+        return this.onlySingleStrict(await this.databaseConnection.select().from(elementCollectionMappingTable).where(
+            and(
+                eq(elementCollectionMappingTable.elementVersionId, elementVersionId),
+                eq(elementCollectionMappingTable.setVersionId, collectionVersionId)
+            )
+        ))
+    }
+
     public async addElementToCollection(
         elementVersionId: Marketplace.Element.VersionId,
         setVersionId: Marketplace.Set.VersionId
     ) {
-        const element = this.onlySingleStrict(
-            await this.databaseConnection
-                .select()
-                .from(exerciseElementTemplateTable)
-                .where(
-                    eq(exerciseElementTemplateTable.versionId, elementVersionId)
-                )
-        );
 
+        // Check if the Set is in draft state, otherwise we cannot add the element to it
         const set = this.onlySingleStrict(
             await this.databaseConnection
                 .select()
-                .from(exerciseElementSetTable)
-                .where(eq(exerciseElementSetTable.versionId, setVersionId))
+                .from(collectionTable)
+                .where(eq(collectionTable.versionId, setVersionId))
         );
 
         if (set.draftState === false) {
@@ -285,28 +330,41 @@ export class CollectionRepository extends BaseRepository {
             );
         }
 
+
+        const element = this.onlySingleStrict(
+            await this.databaseConnection
+                .select()
+                .from(elementTable)
+                .where(
+                    eq(elementTable.versionId, elementVersionId)
+                )
+        );
+
+        // if we already have a mapping the a different version of this element
+        // mapped to this collection - delete it, so the latest added mapping takes precedence
         await this.databaseConnection
-            .delete(elementTemplateToSetMappingTable)
+            .delete(elementCollectionMappingTable)
             .where(
                 and(
                     eq(
-                        elementTemplateToSetMappingTable.setVersionId,
+                        elementCollectionMappingTable.setVersionId,
                         setVersionId
                     ),
                     eq(
-                        elementTemplateToSetMappingTable.elementEntityId,
+                        elementCollectionMappingTable.elementEntityId,
                         element.entityId
                     )
                 )
             );
 
         return await this.databaseConnection
-            .insert(elementTemplateToSetMappingTable)
+            .insert(elementCollectionMappingTable)
             .values({
                 setEntityId: set.entityId,
                 setVersionId,
                 elementEntityId: element.entityId,
                 elementVersionId,
+                isBaseReference: true
             })
             .returning();
     }
@@ -338,34 +396,35 @@ export class CollectionRepository extends BaseRepository {
         sourceSetVersionId: Marketplace.Set.VersionId,
         targetSetVersionId: Marketplace.Set.VersionId
     ) {
-        this.databaseConnection.insert(elementTemplateToSetMappingTable).select(
+        await this.databaseConnection.insert(elementCollectionMappingTable).select(
             this.databaseConnection
                 .select({
                     // INFO: This is order-sensitive, based on the order in the schema
                     // and requires ALL fields (even defaulted ones) to be selected
-                    setEntityId: elementTemplateToSetMappingTable.setEntityId,
+                    setEntityId: elementCollectionMappingTable.setEntityId,
                     setVersionId: sql<string>`${targetSetVersionId}`.as(
                         'setVersionId'
                     ),
                     elementEntityId:
-                        elementTemplateToSetMappingTable.elementEntityId,
+                        elementCollectionMappingTable.elementEntityId,
                     elementVersionId:
-                        elementTemplateToSetMappingTable.elementVersionId,
+                        elementCollectionMappingTable.elementVersionId,
+                    isBaseReference: elementCollectionMappingTable.isBaseReference,
                 } satisfies Record<
-                    keyof typeof elementTemplateToSetMappingTable.$inferInsert,
+                    keyof typeof elementCollectionMappingTable.$inferInsert,
                     any
                 >)
-                .from(elementTemplateToSetMappingTable)
+                .from(elementCollectionMappingTable)
                 .where(
                     eq(
-                        elementTemplateToSetMappingTable.setVersionId,
+                        elementCollectionMappingTable.setVersionId,
                         sourceSetVersionId
                     )
                 )
         );
     }
 
-    public async copyElementsBetweenCollections(
+    public async copyElementsBetweenCollections(data: {
         source: {
             entityId: Marketplace.Set.EntityId;
             versionId: Marketplace.Set.VersionId;
@@ -374,17 +433,16 @@ export class CollectionRepository extends BaseRepository {
             entityId: Marketplace.Set.EntityId;
             versionId: Marketplace.Set.VersionId;
         }
+    }
     ) {
-        console.log(
-            `Copying elements from set version ${source.versionId} to set version ${target.versionId}`
-        );
+        const { source, target } = data;
         await this.databaseConnection.transaction(async (tx) => {
             const targetSet = this.onlySingleStrict(
                 await tx
                     .select()
-                    .from(exerciseElementSetTable)
+                    .from(collectionTable)
                     .where(
-                        eq(exerciseElementSetTable.versionId, target.versionId)
+                        eq(collectionTable.versionId, target.versionId)
                     )
             );
 
@@ -394,8 +452,10 @@ export class CollectionRepository extends BaseRepository {
                 );
             }
 
+            const latestElements = this.latestElements();
+
             const createdElements = await tx
-                .insert(exerciseElementTemplateTable)
+                .insert(elementTable)
                 .select(
                     tx
                         .select({
@@ -411,42 +471,43 @@ export class CollectionRepository extends BaseRepository {
                                 ),
                             version: sql<number>`1`.as('version'),
                             stateVersion:
-                                latestExerciseElementTemplateView.stateVersion,
+                                latestElements.stateVersion,
                             createdBy: sql<string>`${targetSet.owner}`.as(
                                 'createdBy'
                             ),
                             createdAt: sql`now()`.as('createdAt'),
-                            title: latestExerciseElementTemplateView.title,
+                            title: latestElements.title,
                             description:
-                                latestExerciseElementTemplateView.description,
-                            content: latestExerciseElementTemplateView.content,
+                                latestElements.description,
+                            content: latestElements.content,
                         } satisfies Record<
-                            keyof typeof exerciseElementTemplateTable.$inferInsert,
+                            keyof typeof elementTable.$inferInsert,
                             any
                         >)
-                        .from(latestExerciseElementTemplateView)
+                        .from(latestElements)
                         .innerJoin(
-                            elementTemplateToSetMappingTable,
+                            elementCollectionMappingTable,
                             eq(
-                                latestExerciseElementTemplateView.versionId,
-                                elementTemplateToSetMappingTable.elementVersionId
+                                latestElements.versionId,
+                                elementCollectionMappingTable.elementVersionId
                             )
                         )
                         .where(
                             eq(
-                                elementTemplateToSetMappingTable.setVersionId,
+                                elementCollectionMappingTable.setVersionId,
                                 source.versionId
                             )
                         )
                 )
                 .returning();
 
-            await tx.insert(elementTemplateToSetMappingTable).values(
+            await tx.insert(elementCollectionMappingTable).values(
                 createdElements.map((element) => ({
                     setEntityId: target.entityId,
                     setVersionId: target.versionId,
                     elementEntityId: element.entityId,
                     elementVersionId: element.versionId,
+                    isBaseReference: false
                 }))
             );
         });
@@ -457,8 +518,8 @@ export class CollectionRepository extends BaseRepository {
     ) {
         const result = await this.databaseConnection
             .select()
-            .from(exerciseElementSetTable)
-            .where(eq(exerciseElementSetTable.versionId, versionId));
+            .from(collectionTable)
+            .where(eq(collectionTable.versionId, versionId));
 
         return this.onlySingle(result);
     }
@@ -471,12 +532,13 @@ export class CollectionRepository extends BaseRepository {
             allowDraftState: opts?.allowDraftState ?? true,
         });
 
+        console.log("FUCK ME", await this.databaseConnection.select().from(collectionTable), await this.databaseConnection.with(latestCollections).select().from(latestCollections))
+
         const result = this.databaseConnection
             .with(latestCollections)
             .select()
-            .from(latestCollections);
-        //TODO: @Quixelation
-        //.where(eq(exerciseElementSetTable.owner, userId));
+            .from(latestCollections)
+            .where(eq(latestCollections.owner, userId));
 
         return result;
     }
@@ -485,45 +547,46 @@ export class CollectionRepository extends BaseRepository {
         setVersionId: Marketplace.Set.VersionId
     ) {
         return await this.databaseConnection
-            .select(getTableColumns(exerciseElementTemplateTable))
-            .from(exerciseElementTemplateTable)
+            .select(getTableColumns(elementTable))
+            .from(elementTable)
             .leftJoin(
-                elementTemplateToSetMappingTable,
+                elementCollectionMappingTable,
                 eq(
-                    exerciseElementTemplateTable.versionId,
-                    elementTemplateToSetMappingTable.elementVersionId
+                    elementTable.versionId,
+                    elementCollectionMappingTable.elementVersionId
                 )
             )
             .where(
-                eq(elementTemplateToSetMappingTable.setVersionId, setVersionId)
+                eq(elementCollectionMappingTable.setVersionId, setVersionId)
             );
     }
 
     public async getLatestElementVersion(
         entityId: Marketplace.Element.EntityId
     ) {
+        const latestElements = this.latestElements();
         const result = await this.databaseConnection
             .select()
-            .from(latestExerciseElementTemplateView)
-            .where(eq(latestExerciseElementTemplateView.entityId, entityId));
+            .from(latestElements)
+            .where(eq(latestElements.entityId, entityId));
 
         return this.onlySingle(result);
     }
 
-    public async removeElementFromCollection(
+    public async unmapElementFromCollection(
         elementEntityId: Marketplace.Element.EntityId,
         setVersionId: Marketplace.Set.VersionId
     ) {
         await this.databaseConnection
-            .delete(elementTemplateToSetMappingTable)
+            .delete(elementCollectionMappingTable)
             .where(
                 and(
                     eq(
-                        elementTemplateToSetMappingTable.elementEntityId,
+                        elementCollectionMappingTable.elementEntityId,
                         elementEntityId
                     ),
                     eq(
-                        elementTemplateToSetMappingTable.setVersionId,
+                        elementCollectionMappingTable.setVersionId,
                         setVersionId
                     )
                 )
@@ -532,16 +595,16 @@ export class CollectionRepository extends BaseRepository {
 
     public async deleteCollection(entityId: Marketplace.Set.EntityId) {
         await this.databaseConnection
-            .delete(exerciseElementSetTable)
-            .where(eq(exerciseElementSetTable.entityId, entityId));
+            .delete(collectionTable)
+            .where(eq(collectionTable.entityId, entityId));
     }
 
     public async getElementVersions(entityId: Marketplace.Element.EntityId) {
         const result = await this.databaseConnection
             .select()
-            .from(exerciseElementTemplateTable)
-            .where(eq(exerciseElementTemplateTable.entityId, entityId))
-            .orderBy(desc(exerciseElementTemplateTable.version));
+            .from(elementTable)
+            .where(eq(elementTable.entityId, entityId))
+            .orderBy(desc(elementTable.version));
 
         return result;
     }
@@ -550,16 +613,13 @@ export class CollectionRepository extends BaseRepository {
         setEntityId: Marketplace.Set.EntityId,
         visibility: Marketplace.ElementSetVisibility
     ) {
-        console.log(
-            `Updating visibility for setEntityId ${setEntityId} to ${visibility}`
-        );
         return this.onlySingleStrict(
             await this.databaseConnection
-                .update(exerciseElementSetTable)
+                .update(collectionTable)
                 .set({
                     visibility,
                 })
-                .where(eq(exerciseElementSetTable.entityId, setEntityId))
+                .where(eq(collectionTable.entityId, setEntityId))
                 .returning()
         );
     }
@@ -568,7 +628,6 @@ export class CollectionRepository extends BaseRepository {
         setEntityId: Marketplace.Set.EntityId,
         opts?: { allowDraftState?: boolean }
     ) {
-        console.log(opts);
         const latestCollections = this.latestCollections({
             allowDraftState: opts?.allowDraftState ?? true,
         });
@@ -587,22 +646,22 @@ export class CollectionRepository extends BaseRepository {
     ) {
         return this.onlySingle(
             await this.databaseConnection
-                .select(getTableColumns(exerciseElementSetTable))
-                .from(exerciseElementSetTable)
+                .select(getTableColumns(collectionTable))
+                .from(collectionTable)
                 .innerJoin(
-                    elementTemplateToSetMappingTable,
+                    elementCollectionMappingTable,
                     eq(
-                        exerciseElementSetTable.versionId,
-                        elementTemplateToSetMappingTable.setVersionId
+                        collectionTable.versionId,
+                        elementCollectionMappingTable.setVersionId
                     )
                 )
                 .where(
                     eq(
-                        elementTemplateToSetMappingTable.elementEntityId,
+                        elementCollectionMappingTable.elementEntityId,
                         elementEntityId
                     )
                 )
-                .orderBy(desc(exerciseElementSetTable.version))
+                .orderBy(desc(collectionTable.version))
                 .limit(1)
         );
     }

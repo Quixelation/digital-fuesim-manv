@@ -14,10 +14,12 @@ import {
     EditingVersionedElementModalData,
     VersionedElementModalComponent,
 } from '../editor-modals/versioned-element-modal/versioned-element-modal.component';
+import { ElementCardComponent } from '../element-card/element-card.component';
+import { LocaleDatePipe } from '../../../shared/pipes/localeDate.pipe';
 
 @Component({
     selector: 'app-marketplace-set-detail',
-    standalone: false,
+    imports: [ElementCardComponent, LocaleDatePipe],
     templateUrl: './marketplace-set-detail.component.html',
     styleUrl: './marketplace-set-detail.component.scss',
 })

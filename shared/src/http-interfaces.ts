@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { participantKeySchema, trainerKeySchema } from './exercise-keys.js';
 import { exerciseTemplateIdSchema } from './ids.js';
 import { vehicleTemplateSchema } from './models/vehicle-template.js';
-import { AlarmGroup } from './models/alarm-group.js';
+import type { AlarmGroup } from './models/alarm-group.js';
 
 export const exerciseKeysSchema = z.object({
     participantKey: participantKeySchema,
@@ -143,7 +143,7 @@ class Route<TRequest = never, TResponse = never> {
 export namespace Marketplace {
     export const exerciseElementObjectUnionSchema = z.union([
         vehicleTemplateSchema,
-        //TODO: Quixelation
+        // TODO: Quixelation
         z.object({
             type: z.literal('alarmGroup'),
             id: z.string(),
@@ -162,8 +162,8 @@ export namespace Marketplace {
     ]);
 
     export type ExerciseElementObjectUnion =
-        | z.infer<typeof exerciseElementObjectUnionSchema>
-        | AlarmGroup;
+        | AlarmGroup
+        | z.infer<typeof exerciseElementObjectUnionSchema>;
 
     export const elementSetVisbilitySchema = z.enum(['private', 'public']);
 
@@ -175,7 +175,8 @@ export namespace Marketplace {
     const stateVersionedEntitySchema = z.object({
         version: z.number(),
         stateVersion: z.number(),
-        createdAt: z.string(),
+        createdAt: stringToDate,
+        createdBy: z.string(),
     });
 
     // set needs to be split up for internal deps
@@ -185,9 +186,8 @@ export namespace Marketplace {
             .regex(/^set_version_.+$/u)
             .brand<'SetVersionId'>();
         export type VersionId = z.infer<typeof versionIdSchema>;
-        export const isSetVersionId = (value: string): value is VersionId => {
-            return versionIdSchema.safeParse(value).success;
-        };
+        export const isSetVersionId = (value: string): value is VersionId =>
+            versionIdSchema.safeParse(value).success;
 
         export const entityIdSchema = z
             .string()
@@ -196,15 +196,14 @@ export namespace Marketplace {
         export type EntityId = z.infer<typeof entityIdSchema>;
         export const isSetEntityId = (
             value: string | null
-        ): value is EntityId => {
-            return entityIdSchema.safeParse(value).success;
-        };
+        ): value is EntityId => entityIdSchema.safeParse(value).success;
 
         export const dtoSchema = z.object({
             ...stateVersionedEntitySchema.shape,
-            versionId: Set.versionIdSchema,
-            entityId: Set.entityIdSchema,
+            versionId: versionIdSchema,
+            entityId: entityIdSchema,
             title: z.string(),
+            description: z.string(),
             visibility: elementSetVisbilitySchema,
             owner: z.string(),
             draftState: z.boolean(),
@@ -219,24 +218,23 @@ export namespace Marketplace {
             .regex(/^element_version_.+$/u)
             .brand<'ElementVersionId'>();
         export type VersionId = z.infer<typeof versionIdSchema>;
-        export const isVersionId = (value: string): value is VersionId => {
-            return versionIdSchema.safeParse(value).success;
-        };
+        export const isVersionId = (value: string): value is VersionId =>
+            versionIdSchema.safeParse(value).success;
 
         export const entityIdSchema = z
             .string()
             .regex(/^element_entity_.+$/u)
             .brand<'ElementEntityId'>();
         export type EntityId = z.infer<typeof entityIdSchema>;
-        export const isEntityId = (value: string | null): value is EntityId => {
-            return entityIdSchema.safeParse(value).success;
-        };
+        export const isEntityId = (value: string | null): value is EntityId =>
+            entityIdSchema.safeParse(value).success;
 
         export const dtoSchema = z.object({
             ...stateVersionedEntitySchema.shape,
-            versionId: Element.versionIdSchema,
-            entityId: Element.entityIdSchema,
+            versionId: versionIdSchema,
+            entityId: entityIdSchema,
             title: z.string(),
+            description: z.string(),
             content: exerciseElementObjectUnionSchema,
         });
 
@@ -314,7 +312,7 @@ export namespace Marketplace {
 
         export const GetCollectionVersion = new Route({
             response: z.object({
-                result: Set.dtoSchema,
+                result: dtoSchema,
             }),
         });
 
@@ -341,7 +339,8 @@ export namespace Marketplace {
 
         export const SaveDraftState = new Route({
             response: z.object({
-                result: dtoSchema,
+                result: dtoSchema.nullable(),
+                saved: z.boolean().default(true)
             }),
         });
 
@@ -371,13 +370,13 @@ export namespace Marketplace {
                 const schema = z.object({
                     event: z.literal(eventName),
                     data: dataSchema,
-                    collectionEntityId: Set.entityIdSchema,
+                    collectionEntityId: entityIdSchema,
                 });
                 // We need to type seperately to keep the event-name as a literal type
                 return new TypedSchema<
                     {
                         event: TName;
-                        collectionEntityId: Set.EntityId;
+                        collectionEntityId: EntityId;
                         data: z.infer<TData>;
                     },
                     typeof schema
@@ -386,7 +385,7 @@ export namespace Marketplace {
 
             export const DependencyAdd = defineEvent(
                 'dependency:add',
-                Set.versionIdSchema
+                versionIdSchema
             );
 
             export const DependencyReplaceData = defineEvent(
@@ -397,7 +396,7 @@ export namespace Marketplace {
             export const InitialData = defineEvent(
                 'initialdata',
                 z.object({
-                    collection: Set.dtoSchema,
+                    collection: dtoSchema,
                     elements: z.object({
                         direct: z.array(Element.dtoSchema),
                         transitive: z.array(transitiveCollectionSchema),
@@ -424,14 +423,7 @@ export namespace Marketplace {
 
             export const CollectionUpdate = defineEvent(
                 'collection:update',
-                Set.dtoSchema
-            );
-
-            export const VersionSwitch = defineEvent(
-                'version:switch',
-                z.object({
-                    newVersionId: Set.versionIdSchema,
-                })
+                dtoSchema
             );
 
             export const Event = new TypedSchema(
@@ -443,7 +435,6 @@ export namespace Marketplace {
                     ElementDelete.schema,
                     ElementUpdate.schema,
                     InitialData.schema,
-                    VersionSwitch.schema,
                 ])
             );
         }

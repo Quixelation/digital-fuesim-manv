@@ -27,12 +27,13 @@ import {
     selectPersonnelTemplates,
 } from '../../../../state/application/selectors/exercise.selectors';
 import { WritableDraft } from 'immer';
+import { DisplayValidationComponent } from '../../../../shared/validation/display-validation/display-validation.component';
 
 @Component({
     selector: 'app-vehicle-template-form-marketplace',
+    imports: [],
     templateUrl: './vehicle-template-form.component.html',
     styleUrls: ['./vehicle-template-form.component.scss'],
-    standalone: false,
 })
 export class VehicleTemplateFormMarketplaceComponent {
     private readonly messageService = inject(MessageService);

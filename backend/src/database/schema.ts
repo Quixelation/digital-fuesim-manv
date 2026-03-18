@@ -161,7 +161,7 @@ export const setVisibilityEnum = pgEnum('exercise_set_visibility', [
     'public',
 ]);
 
-export const exerciseElementSetTable = pgTable(
+export const collectionTable = pgTable(
     'exercise_element_sets',
     {
         ...stateVersionedEntity<
@@ -180,14 +180,14 @@ export const exerciseElementSetTable = pgTable(
     ]
 );
 
-export const elementTemplateToSetMappingTable = pgTable(
+export const elementCollectionMappingTable = pgTable(
     'exercise_element_to_set_mapping',
     {
         setEntityId: varchar().notNull().$type<Marketplace.Set.EntityId>(),
         setVersionId: varchar()
             .notNull()
             .$type<Marketplace.Set.VersionId>()
-            .references(() => exerciseElementSetTable.versionId, {
+            .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
         elementEntityId: varchar()
@@ -196,9 +196,10 @@ export const elementTemplateToSetMappingTable = pgTable(
         elementVersionId: varchar()
             .notNull()
             .$type<Marketplace.Element.VersionId>()
-            .references(() => exerciseElementTemplateTable.versionId, {
+            .references(() => elementTable.versionId, {
                 onDelete: 'cascade',
             }),
+        isBaseReference: boolean().default(false),
     },
     (table) => [
         unique('unique_element_set_mapping').on(
@@ -221,7 +222,7 @@ export const collectionDependencyMappingTable = pgTable(
         collectionVersionId: varchar()
             .notNull()
             .$type<Marketplace.Set.VersionId>()
-            .references(() => exerciseElementSetTable.versionId, {
+            .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
         dependentCollectionEntityId: varchar()
@@ -230,7 +231,7 @@ export const collectionDependencyMappingTable = pgTable(
         dependentCollectionVersionId: varchar()
             .notNull()
             .$type<Marketplace.Set.VersionId>()
-            .references(() => exerciseElementSetTable.versionId, {
+            .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
     },
@@ -242,7 +243,7 @@ export const collectionDependencyMappingTable = pgTable(
     ]
 );
 
-export const exerciseElementTemplateTable = pgTable(
+export const elementTable = pgTable(
     'exercise_element_templates',
     {
         ...stateVersionedEntity<
@@ -261,40 +262,6 @@ export const exerciseElementTemplateTable = pgTable(
     ]
 );
 
-export const latestExerciseElementTemplateVersionNumbersView = pgView(
-    'latest_exercise_element_template_version_numbers'
-).as((qb) =>
-    qb
-        .select({
-            entityId: exerciseElementTemplateTable.entityId,
-            latestversion: max(exerciseElementTemplateTable.version).as(
-                'latestversion'
-            ),
-        })
-        .from(exerciseElementTemplateTable)
-        .groupBy(exerciseElementTemplateTable.entityId)
-);
-
-export const latestExerciseElementTemplateView = pgView(
-    'latest_exercise_element_templates'
-).as((qb) =>
-    qb
-        .select(getTableColumns(exerciseElementTemplateTable))
-        .from(exerciseElementTemplateTable)
-        .innerJoin(
-            latestExerciseElementTemplateVersionNumbersView,
-            and(
-                eq(
-                    exerciseElementTemplateTable.entityId,
-                    latestExerciseElementTemplateVersionNumbersView.entityId
-                ),
-                eq(
-                    exerciseElementTemplateTable.version,
-                    latestExerciseElementTemplateVersionNumbersView.latestversion
-                )
-            )
-        )
-);
 
 export const actionEntityRelations = relations(actionTable, ({ one }) => ({
     exerciseWrapperEntity: one(exerciseTable, {

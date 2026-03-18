@@ -31,7 +31,6 @@ export type VersionedElementModalData<T> =
 
 @Component({
     selector: 'app-versioned-element-modal',
-    standalone: false,
     templateUrl: './versioned-element-modal.component.html',
     styleUrl: './versioned-element-modal.component.scss',
 })

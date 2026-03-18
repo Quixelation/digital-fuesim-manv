@@ -65,7 +65,7 @@ export class ApiHttpServer {
         app.use(errorHandler);
 
         this.httpServer = app.listen(Config.httpPort, () => {
-            console.log(`HTTP server listening on port ${Config.httpPort}`);
+            //console.log(`HTTP server listening on port ${Config.httpPort}`);
         });
     }
 
