@@ -12,10 +12,10 @@ import type {
     ImageProperties,
     ExerciseOccupation,
 } from './utils/index.js';
-import { versionedElementSchema } from './versioned-elements.js';
+import { versionedElementPartialSchema } from './index.js';
 
 export const vehicleSchema = z.strictObject({
-    ...versionedElementSchema.partial().shape,
+    ...versionedElementPartialSchema.partial().shape,
     id: uuidSchema,
     type: z.literal('vehicle'),
     vehicleType: z.string(),

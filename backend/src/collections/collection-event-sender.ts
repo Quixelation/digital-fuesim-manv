@@ -1,4 +1,8 @@
-import { Marketplace } from 'fuesim-digital-shared';
+import {
+    CollectionEntityId,
+    CollectionVersionId,
+    Marketplace,
+} from 'fuesim-digital-shared';
 import { Request, Response } from 'express';
 import { SSE } from '../sse.js';
 import { CollectionService } from '../database/services/collection-service.js';
@@ -6,10 +10,10 @@ import { filter, takeUntil } from 'rxjs';
 
 export class CollectionEventSender {
     private readonly sse: SSE;
-    private dependencies: Marketplace.Set.EntityId[] = [];
+    private dependencies: CollectionEntityId[] = [];
 
     //INFO: strictness is only enforced because all uses should happen after loadLatestCollectionVersion
-    private latestCollectionVersion!: Marketplace.Set.VersionId;
+    private latestCollectionVersion!: CollectionVersionId;
 
     public get destroy$() {
         return this.sse.destroy$;
@@ -18,7 +22,7 @@ export class CollectionEventSender {
     constructor(
         req: Request,
         res: Response,
-        public readonly collectionEntityId: Marketplace.Set.EntityId,
+        public readonly collectionEntityId: CollectionEntityId,
         private readonly collectionService: CollectionService
     ) {
         console.log(

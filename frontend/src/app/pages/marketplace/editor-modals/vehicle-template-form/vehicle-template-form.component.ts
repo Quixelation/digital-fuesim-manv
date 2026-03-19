@@ -8,9 +8,11 @@ import {
     inject,
     input,
     output,
+    signal,
 } from '@angular/core';
 import { Store } from '@ngrx/store';
 import {
+    cloneDeepMutable,
     uuid,
     type MaterialTemplate,
     type PersonnelTemplate,
@@ -28,19 +30,30 @@ import {
 } from '../../../../state/application/selectors/exercise.selectors';
 import { WritableDraft } from 'immer';
 import { DisplayValidationComponent } from '../../../../shared/validation/display-validation/display-validation.component';
+import { FormsModule } from '@angular/forms';
+import { AutofocusDirective } from '../../../../shared/directives/autofocus.directive';
+import { AsyncPipe } from '@angular/common';
+import { ValuesPipe } from '../../../../shared/pipes/values.pipe';
+import { BaseVersionedElementSubmodal } from '../base-versioned-element-submodal';
 
 @Component({
     selector: 'app-vehicle-template-form-marketplace',
-    imports: [],
+    imports: [
+        DisplayValidationComponent,
+        FormsModule,
+        AutofocusDirective,
+        AsyncPipe,
+        ValuesPipe,
+    ],
     templateUrl: './vehicle-template-form.component.html',
     styleUrls: ['./vehicle-template-form.component.scss'],
 })
-export class VehicleTemplateFormMarketplaceComponent {
+export class VehicleTemplateFormMarketplaceComponent implements OnInit, BaseVersionedElementSubmodal<VehicleTemplate> {
     private readonly messageService = inject(MessageService);
     private readonly store = inject<Store<AppState>>(Store);
 
-    public data = input.required<VersionedElementModalData<any>>();
-    public values = input<WritableDraft<VehicleTemplate>>({
+    public data = input.required<VersionedElementModalData<VehicleTemplate>>();
+    public values = signal<WritableDraft<VehicleTemplate>>({
         type: 'vehicleTemplate',
         id: uuid(),
         image: {
@@ -62,7 +75,14 @@ export class VehicleTemplateFormMarketplaceComponent {
     public materialTemplates$ = this.store.select(selectMaterialTemplates);
     public personnelTemplates$ = this.store.select(selectPersonnelTemplates);
 
-    constructor() {}
+    ngOnInit(): void {
+        const data = this.data();
+        if (data.isEditMode) {
+            this.values.set(
+                cloneDeepMutable(data.element.content as VehicleTemplate)
+            );
+        }
+    }
 
     /**
      * Emits the changed values via submitVehicleTemplate

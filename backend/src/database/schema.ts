@@ -1,5 +1,9 @@
 import type {
     ActionId,
+    CollectionEntityId,
+    CollectionVersionId,
+    ElementEntityId,
+    ElementVersionId,
     ExerciseAction,
     ExerciseId,
     ExerciseState,
@@ -7,6 +11,7 @@ import type {
     Marketplace,
     ParticipantKey,
     TrainerKey,
+    VersionedElementContent,
 } from 'fuesim-digital-shared';
 import type { InferInsertModel, InferSelectModel } from 'drizzle-orm';
 import { and, eq, getTableColumns, max, relations, sql } from 'drizzle-orm';
@@ -164,10 +169,7 @@ export const setVisibilityEnum = pgEnum('exercise_set_visibility', [
 export const collectionTable = pgTable(
     'exercise_element_sets',
     {
-        ...stateVersionedEntity<
-            Marketplace.Set.EntityId,
-            Marketplace.Set.VersionId
-        >('set'),
+        ...stateVersionedEntity<CollectionEntityId, CollectionVersionId>('set'),
         title: varchar().notNull(),
         description: varchar().notNull(),
         visibility: setVisibilityEnum().notNull().default('private'),
@@ -183,19 +185,17 @@ export const collectionTable = pgTable(
 export const elementCollectionMappingTable = pgTable(
     'exercise_element_to_set_mapping',
     {
-        setEntityId: varchar().notNull().$type<Marketplace.Set.EntityId>(),
+        setEntityId: varchar().notNull().$type<CollectionEntityId>(),
         setVersionId: varchar()
             .notNull()
-            .$type<Marketplace.Set.VersionId>()
+            .$type<CollectionVersionId>()
             .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
-        elementEntityId: varchar()
-            .notNull()
-            .$type<Marketplace.Element.EntityId>(),
+        elementEntityId: varchar().notNull().$type<ElementEntityId>(),
         elementVersionId: varchar()
             .notNull()
-            .$type<Marketplace.Element.VersionId>()
+            .$type<ElementVersionId>()
             .references(() => elementTable.versionId, {
                 onDelete: 'cascade',
             }),
@@ -216,21 +216,19 @@ export const elementCollectionMappingTable = pgTable(
 export const collectionDependencyMappingTable = pgTable(
     'collection_dependency_mapping',
     {
-        collectionEntityId: varchar()
-            .notNull()
-            .$type<Marketplace.Set.EntityId>(),
+        collectionEntityId: varchar().notNull().$type<CollectionEntityId>(),
         collectionVersionId: varchar()
             .notNull()
-            .$type<Marketplace.Set.VersionId>()
+            .$type<CollectionVersionId>()
             .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
         dependentCollectionEntityId: varchar()
             .notNull()
-            .$type<Marketplace.Set.EntityId>(),
+            .$type<CollectionEntityId>(),
         dependentCollectionVersionId: varchar()
             .notNull()
-            .$type<Marketplace.Set.VersionId>()
+            .$type<CollectionVersionId>()
             .references(() => collectionTable.versionId, {
                 onDelete: 'cascade',
             }),
@@ -246,22 +244,16 @@ export const collectionDependencyMappingTable = pgTable(
 export const elementTable = pgTable(
     'exercise_element_templates',
     {
-        ...stateVersionedEntity<
-            Marketplace.Element.EntityId,
-            Marketplace.Element.VersionId
-        >('element'),
+        ...stateVersionedEntity<ElementEntityId, ElementVersionId>('element'),
         title: varchar().notNull(),
         description: varchar().notNull(),
-        content: json()
-            .$type<Marketplace.ExerciseElementObjectUnion>()
-            .notNull(),
+        content: json().$type<VersionedElementContent>().notNull(),
     },
     (table) => [
         unique('unique_template_version').on(table.entityId, table.version),
         unique('unique_template_id').on(table.entityId, table.versionId),
     ]
 );
-
 
 export const actionEntityRelations = relations(actionTable, ({ one }) => ({
     exerciseWrapperEntity: one(exerciseTable, {

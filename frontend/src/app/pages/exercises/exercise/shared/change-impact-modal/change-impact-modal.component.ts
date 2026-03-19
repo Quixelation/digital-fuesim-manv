@@ -3,21 +3,23 @@ import {
     ChangeImpact,
     RemovedElementChangeImpact,
 } from '../marketplace-tab/marketplace-tab.component';
-import { Marketplace } from 'fuesim-digital-shared';
+import { ElementDto, Marketplace } from 'fuesim-digital-shared';
 import { z } from 'zod';
 import { CollectionService } from '../../../../../core/exercise-element.service';
+import { MapEditorCardComponent } from '../../../../../shared/components/map-editor-card/map-editor-card.component';
+import { JsonPipe } from '@angular/common';
 
 @Component({
     selector: 'app-change-impact-modal',
-    standalone: false,
     templateUrl: './change-impact-modal.component.html',
     styleUrl: './change-impact-modal.component.scss',
+    imports: [MapEditorCardComponent, JsonPipe],
 })
 export class ChangeImpactModalComponent {
     private readonly collectionService = inject(CollectionService);
 
     public readonly changes: ChangeImpact[] = [];
-    public readonly newCollectionElements!: Marketplace.Element.Dto[];
+    public readonly newCollectionElements!: ElementDto[];
 
     public selectedChangeIndex = signal<number | null>(null);
 
@@ -27,9 +29,7 @@ export class ChangeImpactModalComponent {
     }
 
     public changesToApply = signal<Record<string, ChangeApply>>({});
-    public elementsOfNewCollection = signal<Marketplace.Element.Dto[] | null>(
-        null
-    );
+    public elementsOfNewCollection = signal<ElementDto[] | null>(null);
 
     public setRemovalActionType(type: RemoveChangeApply['action']) {
         const index = this.selectedChangeIndex();
@@ -79,7 +79,7 @@ interface RemoveChangeApply {
     type: 'removed';
     change: RemovedElementChangeImpact;
     action: z.infer<typeof removeChangeApplyActionSchema>;
-    replaceWith?: Marketplace.Element.Dto;
+    replaceWith?: ElementDto;
 }
 
 interface EditableChangeApply {

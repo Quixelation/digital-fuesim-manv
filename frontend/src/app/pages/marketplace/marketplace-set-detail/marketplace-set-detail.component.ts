@@ -4,11 +4,20 @@ import {
     ExerciseElementSetSubscriptionData,
 } from '../../../core/exercise-element.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Marketplace } from 'fuesim-digital-shared';
+import { AlarmGroup, CollectionEntityId, CollectionVersionId, ElementEntityId, isCollectionEntityId, Marketplace, VersionedElementContent } from 'fuesim-digital-shared';
 import { Subject, takeUntil } from 'rxjs';
-import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { ChangedVehicleTemplateValues } from '../../../shared/components/vehicle-template-form/vehicle-template-form.component';
-import { vehicleTemplateSchema } from '../../../../../../shared/dist/models/vehicle-template';
+import {
+    NgbDropdown,
+    NgbDropdownItem,
+    NgbDropdownMenu,
+    NgbDropdownModule,
+    NgbModal,
+    NgbNavModule,
+} from '@ng-bootstrap/ng-bootstrap';
+import {
+    VehicleTemplate,
+    vehicleTemplateSchema,
+} from '../../../../../../shared/dist/models/vehicle-template';
 import {
     CreatingVersionedElementModalData,
     EditingVersionedElementModalData,
@@ -16,10 +25,19 @@ import {
 } from '../editor-modals/versioned-element-modal/versioned-element-modal.component';
 import { ElementCardComponent } from '../element-card/element-card.component';
 import { LocaleDatePipe } from '../../../shared/pipes/localeDate.pipe';
+import { JsonPipe } from '@angular/common';
+import { VersionedElementDisplayNamePipe } from '../../../shared/pipes/versioned-element-type-display-name.pipe';
+import { Collection } from 'ol';
 
 @Component({
     selector: 'app-marketplace-set-detail',
-    imports: [ElementCardComponent, LocaleDatePipe],
+    imports: [
+        ElementCardComponent,
+        LocaleDatePipe,
+        NgbDropdownModule,
+        VersionedElementDisplayNamePipe,
+        NgbNavModule,
+    ],
     templateUrl: './marketplace-set-detail.component.html',
     styleUrl: './marketplace-set-detail.component.scss',
 })
@@ -29,7 +47,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
     private readonly ngbModalService = inject(NgbModal);
     private readonly router = inject(Router);
 
-    public _setEntityId!: Marketplace.Set.EntityId;
+    public _setEntityId!: CollectionEntityId;
 
     private readonly destroy$ = new Subject<void>();
 
@@ -47,6 +65,11 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
         ];
     });
 
+    // This array defined the order in which the element types are displayed in the UI.
+    // Types not included in this array will NOT be displayed in the UI
+    public visibleElementTypesOrder: VersionedElementContent['type'][] =
+        ['vehicleTemplate', 'alarmGroup'];
+
     private subscription: (() => void) | null = null;
 
     constructor() {
@@ -56,7 +79,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
                 this.subscription?.();
                 const setEntityId = params.get('setEntityId') ?? '';
 
-                if (!Marketplace.Set.isSetEntityId(setEntityId)) {
+                if (!isCollectionEntityId(setEntityId)) {
                     this.router.navigate(['/marketplace']);
                     return;
                 }
@@ -102,9 +125,9 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
                     data
                 );
             },
-            collectionVersionId: selectedSetData.collection.versionId,
+            collection: selectedSetData.collection,
             availableCollectionElements: this.availableElements(),
-        } satisfies CreatingVersionedElementModalData<ChangedVehicleTemplateValues>;
+        } satisfies CreatingVersionedElementModalData<AlarmGroup>;
     }
 
     public createNewVehicle() {
@@ -132,78 +155,12 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
                     vehicleTemplateSchema.parse(vehicleTemplate)
                 );
             },
-            collectionVersionId: selectedSetData.collection.versionId,
+            collection: selectedSetData.collection,
             availableCollectionElements: this.availableElements(),
-        } satisfies CreatingVersionedElementModalData<ChangedVehicleTemplateValues>;
+        } satisfies CreatingVersionedElementModalData<VehicleTemplate>;
     }
 
-    public editVehicle(entity: Marketplace.Element.Dto) {
-        if (entity.content.type !== 'vehicleTemplate') {
-            throw new Error('Entity is not a vehicleTemplate');
-        }
-
-        const selectedSetData = this.selectedSetData?.();
-        if (!selectedSetData) {
-            throw new Error('selectedSetData is null');
-        }
-
-        const modal = this.ngbModalService.open(
-            VersionedElementModalComponent,
-            {
-                size: 'xl',
-            }
-        );
-        modal.componentInstance.data = {
-            isEditMode: true,
-            type: 'vehicleTemplate',
-            editableTemplateValues: {
-                aspectRatio: 1,
-                name: entity.content.name,
-                url: entity.content.image.url,
-                height: entity.content.image.height,
-                materialTemplateIds: [], //TODO: @Quixelation
-                personnelTemplateIds: [], //TODO: @Quixelation
-                patientCapacity: entity.content.patientCapacity,
-                type: entity.content.vehicleType,
-            },
-            onSubmit: async ({
-                url,
-                height,
-                aspectRatio,
-                name,
-                materialTemplateIds,
-                patientCapacity,
-                personnelTemplateIds,
-                type,
-            }: ChangedVehicleTemplateValues) => {
-                this.collectionService.updateElement(
-                    entity.entityId,
-                    vehicleTemplateSchema.parse({
-                        id: entity.content.id,
-                        type: 'vehicleTemplate',
-                        image: {
-                            url,
-                            height,
-                            aspectRatio,
-                        },
-                        name,
-                        materialTemplateIds,
-                        personnelTemplateIds,
-                        patientCapacity,
-                        vehicleType: type,
-                    }),
-                    this._setEntityId
-                );
-            },
-            currentVersion: entity.version,
-            collectionEntityId: this._setEntityId,
-            elementEntityId: entity.entityId,
-            collectionVersionId: selectedSetData.collection.versionId,
-            availableCollectionElements: this.availableElements(),
-        } satisfies EditingVersionedElementModalData<ChangedVehicleTemplateValues>;
-    }
-
-    public async deleteExerciseObject(entityId: Marketplace.Element.EntityId) {
+    public async deleteExerciseObject(entityId: ElementEntityId) {
         await this.collectionService.deleteElement(entityId, this._setEntityId);
     }
 
@@ -225,7 +182,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
     }
 
     public async importFromCollection(
-        collectionVersionId: Marketplace.Set.VersionId
+        collectionVersionId: CollectionVersionId
     ) {
         await this.collectionService.addCollectionDependency({
             importTo: this._setEntityId,
@@ -234,7 +191,7 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
     }
 
     public async removeCollectionDependency(
-        collectionVersionId: Marketplace.Set.VersionId
+        collectionVersionId: CollectionVersionId
     ) {
         await this.collectionService.removeCollectionDependency({
             removeFrom: this._setEntityId,

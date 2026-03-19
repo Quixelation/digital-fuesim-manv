@@ -9,7 +9,7 @@ export abstract class BaseRepository {
         protected readonly databaseConnection:
             | DatabaseConnection
             | DatabaseTransaction
-    ) { }
+    ) {}
 
     /**
      * Starts a new transaction
@@ -48,7 +48,6 @@ export abstract class BaseRepository {
         const RepositoryClass = this.constructor as Constructor<typeof this>;
         return new RepositoryClass(newConnection);
     }
-
 
     protected onlySingle = BaseRepository.onlySingle;
     protected static onlySingle<T>(array: T[] | null): T | null {

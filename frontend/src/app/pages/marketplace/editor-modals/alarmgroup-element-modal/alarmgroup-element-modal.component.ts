@@ -1,75 +1,116 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import {
+    Component,
+    computed,
+    effect,
+    input,
+    OnInit,
+    output,
+    signal,
+} from '@angular/core';
 import { VersionedElementModalData } from '../versioned-element-modal/versioned-element-modal.component';
 import {
     AlarmGroup,
     AlarmGroupVehicle,
+    cloneDeepMutable,
+    ElementDto,
+    ElementVersionId,
     Marketplace,
+    TypedElementDto,
     uuid,
     VehicleTemplate,
 } from 'fuesim-digital-shared';
-
-interface EditableAlarmgroupTemplateValues {
-    name: string;
-    limit: number | null;
-}
+import { MapEditorCardComponent } from '../../../../shared/components/map-editor-card/map-editor-card.component';
+import { DisplayValidationComponent } from '../../../../shared/validation/display-validation/display-validation.component';
+import { FormsModule } from '@angular/forms';
+import { NgbDropdownModule } from '@ng-bootstrap/ng-bootstrap';
+import { ValuesPipe } from '../../../../shared/pipes/values.pipe';
+import { JsonPipe } from '@angular/common';
+import { BaseVersionedElementSubmodal } from '../base-versioned-element-submodal';
 
 @Component({
     selector: 'app-alarmgroup-element-modal',
+    imports: [
+        MapEditorCardComponent,
+        DisplayValidationComponent,
+        FormsModule,
+        NgbDropdownModule,
+        ValuesPipe,
+        JsonPipe,
+    ],
     templateUrl: './alarmgroup-element-modal.component.html',
     styleUrl: './alarmgroup-element-modal.component.scss',
 })
-export class AlarmgroupElementModalComponent {
+export class AlarmgroupElementModalComponent
+    implements OnInit, BaseVersionedElementSubmodal<AlarmGroup>
+{
     public data = input.required<VersionedElementModalData<any>>();
-
-    public availableVehicles = computed(() => {
-        const vehicles = this.data().availableCollectionElements;
-        return vehicles.filter((v) => v.content.type === 'vehicleTemplate');
-    });
+    public btnText = input.required<string>();
 
     public disabled = input<boolean>(false);
 
     public submit = output<AlarmGroup>();
 
-    public values: EditableAlarmgroupTemplateValues = { name: '', limit: null };
+    public values = signal<AlarmGroup>({
+        id: uuid(),
+        type: 'alarmGroup',
+        alarmGroupVehicles: {},
+        name: '',
+        triggerCount: 0,
+        triggerLimit: null,
+    });
 
-    public selectedVehicles = signal<
-        Marketplace.Element.TypedDto<VehicleTemplate>[]
-    >([]);
+    public availableVehicles = computed(() => {
+        const vehicles = this.data().availableCollectionElements;
+        return vehicles.filter(
+            (v) => v.content.type === 'vehicleTemplate'
+        ) as TypedElementDto<VehicleTemplate>[];
+    });
 
-    public addVehicle(vehicle: Marketplace.Element.TypedDto<any>) {
-        this.selectedVehicles.update((vehicles) => [...vehicles, vehicle]);
+    ngOnInit() {
+        const data = this.data();
+        if (data.isEditMode) {
+            this.values.set(
+                cloneDeepMutable(data.element.content as AlarmGroup)
+            );
+        }
     }
 
-    public removeVehicle(index: number) {
-        console.log('Removing vehicle at index', index);
-        this.selectedVehicles.update((vehicles) =>
-            vehicles.filter((_, i) => i !== index)
-        );
+    public addVehicle(vehicle: TypedElementDto<VehicleTemplate>) {
+        const id = uuid();
+        this.values.update((ag) => ({
+            ...ag,
+            alarmGroupVehicles: {
+                ...ag.alarmGroupVehicles,
+                [id]: {
+                    vehicleTemplateId: vehicle.versionId,
+                    id,
+                    name: vehicle.content.name,
+                    time: 0,
+                },
+            },
+        }));
+    }
+
+    public removeVehicle(id: string) {
+        this.values.update((ag) => {
+            const newAlarmGroupVehicles = { ...ag.alarmGroupVehicles };
+            delete newAlarmGroupVehicles[id];
+            return {
+                ...ag,
+                alarmGroupVehicles: newAlarmGroupVehicles,
+            };
+        });
+    }
+
+    public getAvailableVehicleByVersionId(
+        versionId: ElementVersionId
+    ): TypedElementDto<VehicleTemplate> | undefined {
+        return this.availableVehicles().find(
+            (v) => v.versionId === versionId
+        ) as TypedElementDto<VehicleTemplate> | undefined;
     }
 
     public submitData() {
-        const dataToSubmit: AlarmGroup = {
-            id: uuid(),
-            type: 'alarmGroup',
-            name: this.values.name,
-            triggerLimit: this.values.limit,
-            alarmGroupVehicles: this.selectedVehicles().reduce(
-                (acc, vehicle) => {
-                    const id = uuid();
-                    const alarmGroupVehicle: AlarmGroupVehicle = {
-                        id,
-                        name: vehicle.content.name,
-                        vehicleTemplateId: vehicle.versionId,
-                        time: 0, //TODO
-                    };
-                    acc[id] = alarmGroupVehicle;
-                    return acc;
-                },
-                {} as { [key: string]: AlarmGroupVehicle }
-            ),
-            triggerCount: 0,
-        };
-
-        this.submit.emit(dataToSubmit);
+        this.submit.emit(this.values());
     }
 }

@@ -2,7 +2,7 @@
     <label class="form-label">Bezeichnung der Alarmgruppe</label>
     <input
         #nameInput="ngModel"
-        [(ngModel)]="values.name"
+        [(ngModel)]="values().name"
         [disabled]="disabled()"
         required
         type="text"
@@ -16,7 +16,7 @@
     <label class="form-label">Anzahl der Auslösungen beschränken auf</label>
     <input
         #limitInput="ngModel"
-        [(ngModel)]="values.limit"
+        [(ngModel)]="values().triggerLimit"
         [disabled]="disabled()"
         type="number"
         class="form-control"
@@ -29,7 +29,7 @@
 
 <div class="form-group mb-3">
     <label class="form-label"
-        >Materialien
+        >Fahrzeuge
 
         @if (!disabled()) {
             <div ngbDropdown autoClose="outside" class="d-inline-block">
@@ -59,23 +59,34 @@
             </div>
         }
     </label>
-    @if (selectedVehicles().length > 0) {
+    @if ((values().alarmGroupVehicles | values).length > 0) {
         <div class="d-flex flex-wrap">
             @for (
-                vehicleTemplate of selectedVehicles();
-                track vehicleTemplate.content.id;
+                vehicleTemplate of values().alarmGroupVehicles | values;
+                track vehicleTemplate.id;
                 let index = $index
             ) {
-                <app-map-editor-card
-                    [title]="vehicleTemplate.content.name"
-                    [imageUrl]="vehicleTemplate.content.image.url"
-                    [enableDeleteButton]="!disabled()"
-                    (elementDelete)="removeVehicle(index)"
-                />
+                @let vehicle =
+                    getAvailableVehicleByVersionId(
+                        vehicleTemplate.vehicleTemplateId
+                    );
+                @if (vehicle === undefined) {
+                    <div class="alert alert-danger" role="alert">
+                        Fehler: Fahrzeugvorlage mit ID
+                        {{ vehicleTemplate.vehicleTemplateId }} nicht gefunden.
+                    </div>
+                } @else {
+                    <app-map-editor-card
+                        [title]="vehicle.content.name"
+                        [imageUrl]="vehicle.content.image.url"
+                        [enableDeleteButton]="!disabled()"
+                        (elementDelete)="removeVehicle(vehicleTemplate.id)"
+                    />
+                }
             }
         </div>
     } @else {
-        <div class="text-muted mt-3 mb-3">Keine Materialien zugewiesen</div>
+        <div class="text-muted mt-3 mb-3">Keine Fahrzeuge zugewiesen</div>
     }
 </div>
 
@@ -85,6 +96,6 @@
         [disabled]="nameInput.invalid"
         (click)="submitData()"
     >
-        Änderungen speichern
+        {{ btnText() }}
     </button>
 }

@@ -1,11 +1,20 @@
 import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { CollectionService } from '../../../core/exercise-element.service';
-import { Marketplace } from 'fuesim-digital-shared';
-import { ActivatedRoute, Event, NavigationEnd, Router } from '@angular/router';
+import { CollectionEntityId, isCollectionEntityId, Marketplace } from 'fuesim-digital-shared';
+import {
+    ActivatedRoute,
+    Event,
+    NavigationEnd,
+    Router,
+    RouterModule,
+} from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
+import { HeaderComponent } from '../../../shared/components/header/header.component';
+import { NgbNav } from '@ng-bootstrap/ng-bootstrap';
 
 @Component({
     selector: 'app-marketplace-layout',
+    imports: [HeaderComponent, RouterModule, NgbNav],
     templateUrl: './marketplace-layout.component.html',
     styleUrl: './marketplace-layout.component.scss',
 })
@@ -15,8 +24,9 @@ export class MarketplaceLayoutComponent implements OnDestroy {
 
     private readonly destroy$ = new Subject<void>();
 
-    public currentlySelectedSetEntityId =
-        signal<Marketplace.Set.EntityId | null>(null);
+    public currentlySelectedSetEntityId = signal<CollectionEntityId | null>(
+        null
+    );
 
     public constructor() {
         this.collectionService.loadCollections();
@@ -43,7 +53,7 @@ export class MarketplaceLayoutComponent implements OnDestroy {
                     if (!setEntityIdSegment) return;
 
                     this.currentlySelectedSetEntityId.set(
-                        Marketplace.Set.isSetEntityId(setEntityIdSegment)
+                        isCollectionEntityId(setEntityIdSegment)
                             ? setEntityIdSegment
                             : null
                     );

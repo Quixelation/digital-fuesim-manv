@@ -23,7 +23,7 @@ import {
     SpatialTree,
     MaterialTemplate,
     PersonnelTemplate,
-    versionedElementSchema,
+    versionedElementPartialSchema,
     exerciseStatusSchema,
 } from './models/index.js';
 import type {
@@ -93,7 +93,7 @@ export class ExerciseState {
     @IsZodSchema(randomStateSchema)
     public readonly randomState: RandomState = newSeededRandomState();
     // String, bc versionId is a Prefixed UUID
-    @IsZodSchema(versionedElementSchema.nullable())
+    @IsZodSchema(versionedElementPartialSchema.nullable())
     public readonly selectedCollection: VersionedCollectionPartial | null =
         null;
 

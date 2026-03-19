@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { participantKeySchema, trainerKeySchema } from './exercise-keys.js';
 import { exerciseTemplateIdSchema } from './ids.js';
 import { vehicleTemplateSchema } from './models/vehicle-template.js';
-import type { AlarmGroup } from './models/alarm-group.js';
+import { alarmGroupSchema } from './models/alarm-group.js';
+import { stringToDate } from './models/utils/date.js';
+import { collectionDtoSchema, CollectionEntityId, collectionEntityIdSchema, collectionVersionIdSchema, collectionVisibilitySchema, elementDtoSchema, elementEntityIdSchema, versionedElementContentSchema } from './models/index.js';
 
 export const exerciseKeysSchema = z.object({
     participantKey: participantKeySchema,
@@ -31,14 +33,6 @@ export interface AuthQueryParams {
     loginSuccess?: boolean;
 }
 
-const stringToDate = z.codec(
-    z.iso.datetime({ offset: true }), // input schema: ISO date string
-    z.date(), // output schema: Date object
-    {
-        decode: (isoString) => new Date(isoString), // ISO string → Date
-        encode: (date) => date.toISOString(), // Date → ISO string
-    }
-);
 
 export const getExerciseResponseDataSchema = z.object({
     participantKey: participantKeySchema,
@@ -141,137 +135,40 @@ class Route<TRequest = never, TResponse = never> {
 }
 
 export namespace Marketplace {
-    export const exerciseElementObjectUnionSchema = z.union([
-        vehicleTemplateSchema,
-        // TODO: Quixelation
-        z.object({
-            type: z.literal('alarmGroup'),
-            id: z.string(),
-            name: z.string(),
-            triggerLimit: z.number().nullable(),
-            alarmGroupVehicles: z.record(
-                z.string(),
-                z.object({
-                    name: z.string(),
-                    vehicleTemplateId: z.string(),
-                    time: z.number(),
-                })
-            ),
-            triggerCount: z.number(),
-        }),
-    ]);
-
-    export type ExerciseElementObjectUnion =
-        | AlarmGroup
-        | z.infer<typeof exerciseElementObjectUnionSchema>;
-
-    export const elementSetVisbilitySchema = z.enum(['private', 'public']);
-
-    export type ElementSetVisibility = z.infer<
-        typeof elementSetVisbilitySchema
-    >;
-
-    // WARNING: This does not include versionId and entityId, since those have specific drizzle schemas
-    const stateVersionedEntitySchema = z.object({
-        version: z.number(),
-        stateVersion: z.number(),
-        createdAt: stringToDate,
-        createdBy: z.string(),
-    });
-
-    // set needs to be split up for internal deps
-    export namespace Set {
-        export const versionIdSchema = z
-            .string()
-            .regex(/^set_version_.+$/u)
-            .brand<'SetVersionId'>();
-        export type VersionId = z.infer<typeof versionIdSchema>;
-        export const isSetVersionId = (value: string): value is VersionId =>
-            versionIdSchema.safeParse(value).success;
-
-        export const entityIdSchema = z
-            .string()
-            .regex(/^set_entity_.+$/u)
-            .brand<'SetEntityId'>();
-        export type EntityId = z.infer<typeof entityIdSchema>;
-        export const isSetEntityId = (
-            value: string | null
-        ): value is EntityId => entityIdSchema.safeParse(value).success;
-
-        export const dtoSchema = z.object({
-            ...stateVersionedEntitySchema.shape,
-            versionId: versionIdSchema,
-            entityId: entityIdSchema,
-            title: z.string(),
-            description: z.string(),
-            visibility: elementSetVisbilitySchema,
-            owner: z.string(),
-            draftState: z.boolean(),
-        });
-
-        export type Dto = z.infer<typeof dtoSchema>;
-    }
-
     export namespace Element {
-        export const versionIdSchema = z
-            .string()
-            .regex(/^element_version_.+$/u)
-            .brand<'ElementVersionId'>();
-        export type VersionId = z.infer<typeof versionIdSchema>;
-        export const isVersionId = (value: string): value is VersionId =>
-            versionIdSchema.safeParse(value).success;
-
-        export const entityIdSchema = z
-            .string()
-            .regex(/^element_entity_.+$/u)
-            .brand<'ElementEntityId'>();
-        export type EntityId = z.infer<typeof entityIdSchema>;
-        export const isEntityId = (value: string | null): value is EntityId =>
-            entityIdSchema.safeParse(value).success;
-
-        export const dtoSchema = z.object({
-            ...stateVersionedEntitySchema.shape,
-            versionId: versionIdSchema,
-            entityId: entityIdSchema,
-            title: z.string(),
-            description: z.string(),
-            content: exerciseElementObjectUnionSchema,
-        });
-
-        export type Dto = z.infer<typeof dtoSchema>;
-        export type TypedDto<TContent> = Omit<Dto, 'content'> & {
-            content: TContent;
-        };
-
         export const Create = new Route({
             request: z.object({
-                data: exerciseElementObjectUnionSchema,
+                data: versionedElementContentSchema
             }),
             response: z.object({
-                newSetVersionId: Set.versionIdSchema,
-                result: dtoSchema,
+                newSetVersionId: collectionVersionIdSchema,
+                result: elementDtoSchema,
             }),
         });
 
         export const Edit = new Route({
             request: z.object({
-                data: exerciseElementObjectUnionSchema,
+                data: versionedElementContentSchema,
             }),
             response: z.object({
-                newSetVersionId: Set.versionIdSchema,
-                result: dtoSchema,
+                newSetVersionId: collectionVersionIdSchema,
+                result: elementDtoSchema,
             }),
         });
 
         export const Delete = new Route({
             response: z.object({
-                newSetVersionId: Set.versionIdSchema,
+                newSetVersionId: collectionVersionIdSchema.nullable(),
+                requiresConfirmation: z.array(z.object({
+                    element: elementDtoSchema,
+                    blocking: z.boolean()
+                }))
             }),
         });
 
         export const GetByEntityId = new Route({
             response: z.object({
-                result: z.array(dtoSchema),
+                result: z.array(elementDtoSchema),
             }),
         });
     }
@@ -282,43 +179,43 @@ export namespace Marketplace {
                 title: z.string().trim().nonempty(),
             }),
             response: z.object({
-                result: dtoSchema,
+                result: collectionDtoSchema,
             }),
         });
 
         export const LoadMy = new Route({
             response: z.object({
-                result: z.array(dtoSchema),
+                result: z.array(collectionDtoSchema),
             }),
         });
 
         export const GetByEntityId = new Route({
             response: z.object({
-                result: dtoSchema,
+                result: collectionDtoSchema,
             }),
         });
 
         export const transitiveCollectionSchema = z.object({
-            collection: dtoSchema,
-            elements: z.array(Element.dtoSchema),
+            collection: collectionDtoSchema,
+            elements: z.array(elementDtoSchema),
         });
 
         export const GetLatestElementsBySetVersionId = new Route({
             response: z.object({
-                direct: z.array(Element.dtoSchema),
+                direct: z.array(elementDtoSchema),
                 transitive: z.array(transitiveCollectionSchema),
             }),
         });
 
         export const GetCollectionVersion = new Route({
             response: z.object({
-                result: dtoSchema,
+                result: collectionDtoSchema,
             }),
         });
 
         export const ChangeVisibility = new Route({
             request: z.object({
-                visibility: elementSetVisbilitySchema,
+                visibility: collectionVisibilitySchema,
             }),
             response: z.object({
                 status: z.literal(['success']),
@@ -327,7 +224,7 @@ export namespace Marketplace {
 
         export const Duplicate = new Route({
             response: z.object({
-                createdSet: dtoSchema,
+                createdSet: collectionDtoSchema,
             }),
         });
 
@@ -339,14 +236,14 @@ export namespace Marketplace {
 
         export const SaveDraftState = new Route({
             response: z.object({
-                result: dtoSchema.nullable(),
-                saved: z.boolean().default(true)
+                result: collectionDtoSchema.nullable(),
+                saved: z.boolean().default(true),
             }),
         });
 
         export const GetElementsOfCollectionVersion = new Route({
             response: z.object({
-                direct: z.array(Element.dtoSchema),
+                direct: z.array(elementDtoSchema),
                 transitive: z.array(transitiveCollectionSchema),
             }),
         });
@@ -370,13 +267,13 @@ export namespace Marketplace {
                 const schema = z.object({
                     event: z.literal(eventName),
                     data: dataSchema,
-                    collectionEntityId: entityIdSchema,
+                    collectionEntityId: collectionEntityIdSchema,
                 });
                 // We need to type seperately to keep the event-name as a literal type
                 return new TypedSchema<
                     {
                         event: TName;
-                        collectionEntityId: EntityId;
+                        collectionEntityId: CollectionEntityId;
                         data: z.infer<TData>;
                     },
                     typeof schema
@@ -385,7 +282,7 @@ export namespace Marketplace {
 
             export const DependencyAdd = defineEvent(
                 'dependency:add',
-                versionIdSchema
+                collectionVersionIdSchema
             );
 
             export const DependencyReplaceData = defineEvent(
@@ -396,9 +293,9 @@ export namespace Marketplace {
             export const InitialData = defineEvent(
                 'initialdata',
                 z.object({
-                    collection: dtoSchema,
+                    collection: collectionDtoSchema,
                     elements: z.object({
-                        direct: z.array(Element.dtoSchema),
+                        direct: z.array(elementDtoSchema),
                         transitive: z.array(transitiveCollectionSchema),
                     }),
                 })
@@ -406,24 +303,24 @@ export namespace Marketplace {
 
             export const ElementCreate = defineEvent(
                 'element:create',
-                Element.dtoSchema
+                elementDtoSchema
             );
 
             export const ElementUpdate = defineEvent(
                 'element:update',
-                Element.dtoSchema
+                elementDtoSchema
             );
 
             export const ElementDelete = defineEvent(
                 'element:delete',
                 z.object({
-                    entityId: Element.entityIdSchema,
+                    entityId: elementEntityIdSchema,
                 })
             );
 
             export const CollectionUpdate = defineEvent(
                 'collection:update',
-                dtoSchema
+                collectionDtoSchema
             );
 
             export const Event = new TypedSchema(

@@ -1,9 +1,10 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import {
+    CollectionDto,
+    ElementDto,
     Marketplace,
     uuid,
     Vehicle,
-    VehicleTemplate,
     VersionedCollectionPartial,
 } from 'fuesim-digital-shared';
 import { DragElementService } from '../core/drag-element.service';
@@ -15,20 +16,14 @@ import {
     selectSelectedCollection,
     selectVehicles,
 } from '../../../../../state/application/selectors/exercise.selectors';
-import { update } from 'lodash-es';
 import { selectStateSnapshot } from '../../../../../state/get-state-snapshot';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { vehicleTemplateSchema } from '../../../../../../../../shared/dist/models/vehicle-template';
-import { ChangedVehicleTemplateValues } from '../../../../../shared/components/vehicle-template-form/vehicle-template-form.component';
-import {
-    VersionedElementModalComponent,
-    CreatingVersionedElementModalData,
-} from '../../../../marketplace/editor-modals/versioned-element-modal/versioned-element-modal.component';
 import { ChangeImpactModalComponent } from '../change-impact-modal/change-impact-modal.component';
+import { MapEditorCardComponent } from '../../../../../shared/components/map-editor-card/map-editor-card.component';
 
 @Component({
     selector: 'app-marketplace-tab',
-    standalone: false,
+    imports: [MapEditorCardComponent],
     templateUrl: './marketplace-tab.component.html',
     styleUrl: './marketplace-tab.component.scss',
 })
@@ -38,7 +33,7 @@ export class MarketplaceTabComponent {
     private readonly exerciseService = inject(ExerciseService);
     private readonly store = inject<Store<AppState>>(Store);
     private readonly ngbModalService = inject(NgbModal);
-    public readonly availableCollections = signal<Marketplace.Set.Dto[]>([]);
+    public readonly availableCollections = signal<CollectionDto[]>([]);
     public readonly updateAvailable = signal<Awaited<
         ReturnType<typeof this.collectionService.checkNewerVersionAvailable>
     > | null>(null);
@@ -63,8 +58,8 @@ export class MarketplaceTabComponent {
     public selectedCollection = this.store.selectSignal(
         selectSelectedCollection
     );
-    public selectedCollectionData = signal<Marketplace.Set.Dto | null>(null);
-    public elementsOfSelectedCollection = signal<Marketplace.Element.Dto[]>([]);
+    public selectedCollectionData = signal<CollectionDto | null>(null);
+    public elementsOfSelectedCollection = signal<ElementDto[]>([]);
     public collectionSubscription: (() => void) | null = null;
 
     private async updateCollectionElementSubscription(
@@ -86,7 +81,7 @@ export class MarketplaceTabComponent {
         this.updateAvailable.set(collectionUpdateAvailable);
     }
 
-    public async selectCollection(collection: Marketplace.Set.Dto) {
+    public async selectCollection(collection: CollectionDto) {
         const result = await this.exerciseService.proposeAction({
             type: '[Collection] Set Exercise Collection',
             collectionVersion: {
@@ -159,9 +154,9 @@ export class MarketplaceTabComponent {
     }
 
     private async calcChangeImpact(data: {
-        previous: Marketplace.Element.Dto[];
+        previous: ElementDto[];
         inExercise: InExerciseElement[];
-        new: Marketplace.Element.Dto[];
+        new: ElementDto[];
     }): Promise<ChangeImpact[]> {
         const {
             addedElements,
@@ -235,8 +230,8 @@ export class MarketplaceTabComponent {
     }
 
     private async checkForChangesBetweenVersions(
-        currentState: Marketplace.Element.Dto[],
-        newerVersion: Marketplace.Element.Dto[]
+        currentState: ElementDto[],
+        newerVersion: ElementDto[]
     ) {
         const addedElements = [];
         const editedNewElements = [];
@@ -279,9 +274,9 @@ export class MarketplaceTabComponent {
     }
 
     private vehicleChangeImpact(data: {
-        previous: Marketplace.Element.Dto;
+        previous: ElementDto;
         inExercise: Vehicle;
-        new: Marketplace.Element.Dto;
+        new: ElementDto;
     }): EditableElementChangeImpact[] {
         // EDITABLE FIELDS: name
         const impacts: EditableElementChangeImpact[] = [];
@@ -315,14 +310,14 @@ export type ChangeImpact =
 export interface AddedElementChangeImpact {
     id: string;
     type: 'added';
-    element: Marketplace.Element.Dto;
+    element: ElementDto;
 }
 
 export interface RemovedElementChangeImpact {
     id: string;
     type: 'removed';
     element: InExerciseElement;
-    entity: Marketplace.Element.Dto;
+    entity: ElementDto;
 }
 
 export interface EditableElementChangeImpact {

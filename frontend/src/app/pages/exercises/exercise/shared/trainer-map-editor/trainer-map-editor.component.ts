@@ -42,11 +42,12 @@ import {
 import { selectStateSnapshot } from '../../../../../state/get-state-snapshot';
 import { ExerciseMapComponent } from '../exercise-map/exercise-map.component';
 import { FileInputDirective } from '../../../../../shared/directives/file-input.directive';
-import { MapEditorCardComponent } from '../editor-panel/map-editor-card/map-editor-card.component';
 import { PatientStatusBadgeComponent } from '../../../../../shared/components/patient-status-badge/patient-status-badge.component';
 import { PatientStatusDisplayComponent } from '../../../../../shared/components/patient-status-displayl/patient-status-display/patient-status-display.component';
 import { TrainerToolbarComponent } from '../trainer-toolbar/trainer-toolbar.component';
 import { ValuesPipe } from '../../../../../shared/pipes/values.pipe';
+import { MapEditorCardComponent } from '../../../../../shared/components/map-editor-card/map-editor-card.component';
+import { MarketplaceTabComponent } from '../marketplace-tab/marketplace-tab.component';
 
 const categories = ['green', 'yellow', 'red'] as const;
 const colorCodeOfCategories = {
@@ -63,6 +64,7 @@ type FilterCategory =
     templateUrl: './trainer-map-editor.component.html',
     styleUrls: ['./trainer-map-editor.component.scss'],
     imports: [
+        MarketplaceTabComponent,
         ExerciseMapComponent,
         FileInputDirective,
         NgbAccordionDirective,

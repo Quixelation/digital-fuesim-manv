@@ -1,7 +1,7 @@
 import express from 'express';
 import { PeriodicEventHandler } from './exercise/periodic-events/periodic-event-handler.js';
 import { ExerciseWebsocketServer } from './exercise/websocket.js';
-import { ApiHttpServer } from './http-server.js'
+import { ApiHttpServer } from './http-server.js';
 import type { DatabaseService } from './database/services/database-service.js';
 import type { ExerciseService } from './database/services/exercise-service.js';
 import type { AuthService } from './auth/auth-service.js';

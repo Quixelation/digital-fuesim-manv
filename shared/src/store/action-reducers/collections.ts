@@ -1,16 +1,13 @@
 import { IsValue } from '../../utils/validators/index.js';
 import type { Action, ActionReducer } from '../action-reducer.js';
-import {
-    VersionedCollectionPartial,
-    versionedCollectionSchema,
-} from '../../models/versioned-elements.js';
 import { IsZodSchema } from '../../utils/validators/is-zod-object.js';
+import { VersionedCollectionPartial, versionedCollectionPartialSchema } from '../../index.js';
 
 export class SetExerciseCollection implements Action {
     @IsValue('[Collection] Set Exercise Collection' as const)
     public readonly type = '[Collection] Set Exercise Collection';
 
-    @IsZodSchema(versionedCollectionSchema.nullable())
+    @IsZodSchema(versionedCollectionPartialSchema.nullable())
     public readonly collectionVersion!: VersionedCollectionPartial | null;
 }
 

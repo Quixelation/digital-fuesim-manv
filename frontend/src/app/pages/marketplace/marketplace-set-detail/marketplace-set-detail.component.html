@@ -4,61 +4,11 @@
 
         <div class="d-flex flex-row gap-2 align-items-center">
             <button
-                class="btn btn-outline-danger"
-                type="button"
-                (click)="deleteSet()"
-            >
-                <i class="bi bi-trash"></i>
-            </button>
-            <button
                 type="button"
                 class="btn btn-outline-primary"
                 (click)="duplicateSet()"
             >
                 <i class="bi bi-copy"></i>
-            </button>
-
-            <div ngbDropdown>
-                <button
-                    type="button"
-                    class="btn btn-outline-primary d-flex flex-row align-items-center"
-                    ngbDropdownToggle
-                >
-                    <i class="bi bi-box-arrow-in-down-right me-2"></i>
-                    <span>Importieren</span>
-                </button>
-                <div ngbDropdownMenu>
-                    @for (
-                        availableCollection of availableCollections();
-                        track availableCollection.versionId
-                    ) {
-                        @if (availableCollection.entityId !== _setEntityId) {
-                            <button
-                                ngbDropdownItem
-                                (click)="
-                                    importFromCollection(
-                                        availableCollection.versionId
-                                    )
-                                "
-                            >
-                                {{ availableCollection.title }}
-                            </button>
-                        }
-                    }
-                </div>
-            </div>
-            @if (setData.collection.visibility === 'private') {
-                <button
-                    type="button"
-                    class="btn btn-outline-primary"
-                    ngbTooltip="Dieses Set veröffentlichen"
-                    (click)="makeSetPublic()"
-                >
-                    <i class="bi bi-globe"></i>
-                </button>
-            }
-            <button type="button" class="btn btn-outline-primary">
-                <i class="bi bi-clock-history"></i>
             </button>
         </div>
     </div>
@@ -94,29 +44,9 @@
                 </span>
             }
         </div>
-        <div class="d-flex flex-row gap-2 align-items-center">
-            <div ngbDropdown>
-                <button
-                    type="button"
-                    class="btn btn-outline-primary"
-                    ngbDropdownToggle
-                >
-                    Neues Übungselement
-                </button>
-                <div ngbDropdownMenu>
-                    <button ngbDropdownItem (click)="createNewVehicle()">
-                        Fahrzeug
-                    </button>
-                    <button ngbDropdownItem (click)="createNewAlarmgroup()">
-                        Alarmgruppe
-                    </button>
-                    <button ngbDropdownItem>Kartenbild</button>
-                </div>
-            </div>
-        </div>
+        <div class="d-flex flex-row gap-2 align-items-center"></div>
     </div>
 
-    <hr />
     @if (setData.collection.draftState) {
         <div
             class="alert alert-primary d-flex flex-row justify-content-between align-items-center gap-3"
@@ -125,88 +55,185 @@
             <span class="d-flex flex-row align-items-center gap-3">
                 <i class="bi bi-info-circle"></i>
                 <span>
-                    Dieses Set enthält ungespeicherte Änderungen. Speichern Sie
-                    das Set, um es in Übungsszenarien verwenden zu können.
+                    Diese Sammlung enthält unveröffentlichte Änderungen.<br />
+                    Veröffentlichen Sie diese Version, um die Änderungen in
+                    Übungsszenarien verwenden zu können.
                 </span>
             </span>
             <button class="btn btn-primary btn-sm" (click)="saveDraftState()">
-                Änderungen speichern
+                Als neue Version speichern
             </button>
         </div>
     }
-    <div class="container">
-        <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
-            @for (
-                exerciseObject of selectedSetData()!.objects.direct;
-                track exerciseObject.versionId
-            ) {
-                <app-element-card [element]="exerciseObject"/>
-
-                @switch (exerciseObject.content.type) {
-                    @case ('vehicleTemplate') {
-                        <!-- <app-map-editor-card
-                            [imageUrl]="exerciseObject.content.image.url"
-                            [title]="exerciseObject.title"
-                            [enableDeleteButton]="true"
-                            [enableEditButton]="true"
-                            (elementDelete)="
-                                deleteExerciseObject(exerciseObject.entityId)
-                            "
-                            (elementEdit)="editVehicle(exerciseObject)"
-                        /> -->
-                    }
-                    @case ('alarmGroup') {
-                        {{ exerciseObject.title }} (Alarmgruppe)
-                    }
+    <ul ngbNav #nav="ngbNav" class="nav-tabs" [animation]="false">
+        <li [ngbNavItem]="1">
+            <button ngbNavLink>Elemente</button>
+            <ng-template ngbNavContent>
+                <div class="w-100 d-flex flex-row justify-content-end mb-3">
+                    <div ngbDropdown>
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary"
+                            ngbDropdownToggle
+                        >
+                            Neues Übungselement
+                        </button>
+                        <div ngbDropdownMenu>
+                            <button
+                                ngbDropdownItem
+                                (click)="createNewVehicle()"
+                            >
+                                Fahrzeug
+                            </button>
+                            <button
+                                ngbDropdownItem
+                                (click)="createNewAlarmgroup()"
+                            >
+                                Alarmgruppe
+                            </button>
+                            <button ngbDropdownItem>Kartenbild</button>
+                        </div>
+                    </div>
+                </div>
+                @for (type of visibleElementTypesOrder; track type) {
+                    <h4>{{ (type | versionedElementDisplayName).plural }}</h4>
+                    <div class="container mb-3">
+                        <div
+                            class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2"
+                        >
+                            @for (
+                                exerciseObject of selectedSetData()!.objects
+                                    .direct;
+                                track exerciseObject.versionId
+                            ) {
+                                @if (exerciseObject.content.type === type) {
+                                    <app-element-card
+                                        [element]="exerciseObject"
+                                        [availableElements]="
+                                            availableElements()
+                                        "
+                                        [collection]="setData.collection"
+                                    />
+                                }
+                            }
+                        </div>
+                    </div>
                 }
-            }
-        </div>
-        @for (
-            dependency of selectedSetData()!.objects.transitive;
-            track dependency.collection.versionId
-        ) {
-            <hr />
-            <div
-                class="d-flex flex-row align-items-center justify-content-between gap-2 mb-3"
-            >
-                <h4 class="mb-0">
-                    {{ dependency.collection.title }} (Version
-                    {{ dependency.collection.version }}, draft:
-                    {{ dependency.collection.draftState }})
-                </h4>
-                <button class="btn btn-outline-primary btn-sm">
-                    Version aktualisieren
-                </button>
-            </div>
-            <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
+            </ng-template>
+        </li>
+        <li [ngbNavItem]="2">
+            <button ngbNavLink>Verwendete Sammlungen</button>
+            <ng-template ngbNavContent>
+                <div class="w-100 d-flex flex-row justify-content-end mb-3">
+                    <div ngbDropdown>
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary d-flex flex-row align-items-center"
+                            ngbDropdownToggle
+                        >
+                            <i class="bi bi-box-arrow-in-down-right me-2"></i>
+                            <span>Weitere Sammlung verwenden</span>
+                        </button>
+                        <div ngbDropdownMenu>
+                            @for (
+                                availableCollection of availableCollections();
+                                track availableCollection.versionId
+                            ) {
+                                @if (
+                                    availableCollection.entityId !==
+                                    _setEntityId
+                                ) {
+                                    <button
+                                        ngbDropdownItem
+                                        (click)="
+                                            importFromCollection(
+                                                availableCollection.versionId
+                                            )
+                                        "
+                                    >
+                                        {{ availableCollection.title }}
+                                    </button>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+
                 @for (
-                    exerciseObject of dependency.elements;
-                    track exerciseObject.versionId
+                    dependency of selectedSetData()!.objects.transitive;
+                    track dependency.collection.versionId
                 ) {
-                    <app-element-card [element]="exerciseObject"/>
-
-                    @switch (exerciseObject.content.type) {
-                        @case ('vehicleTemplate') {
-                            <!-- <app-map-editor-card
-                                [imageUrl]="exerciseObject.content.image.url"
-                                [title]="exerciseObject.title"
-                                [enableDeleteButton]="true"
-                                [enableEditButton]="true"
-                                (elementDelete)="
-                                    deleteExerciseObject(
-                                        exerciseObject.entityId
-                                    )
-                                "
-                                (elementEdit)="editVehicle(exerciseObject)"
-                            /> -->
+                    <div
+                        class="d-flex flex-row align-items-center justify-content-between gap-2 mb-3"
+                    >
+                        <h4 class="mb-0">
+                            {{ dependency.collection.title }} (Version
+                            {{ dependency.collection.version }}, draft:
+                            {{ dependency.collection.draftState }})
+                        </h4>
+                        <button class="btn btn-outline-primary btn-sm">
+                            Version aktualisieren
+                        </button>
+                    </div>
+                    <div class="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-2">
+                        @for (
+                            exerciseObject of dependency.elements;
+                            track exerciseObject.versionId
+                        ) {
+                            <app-element-card
+                                [element]="exerciseObject"
+                                [editable]="false"
+                            />
                         }
-
-                        @case ('alarmGroup') {
-                            {{ exerciseObject.title }} (Alarmgruppe)
-                        }
-                    }
+                    </div>
+                    <hr />
                 }
-            </div>
-        }
-    </div>
+            </ng-template>
+        </li>
+        <li [ngbNavItem]="3">
+            <button ngbNavLink>Eigenschaften</button>
+            <ng-template ngbNavContent>
+                @if (setData.collection.visibility === 'private') {
+                    <button
+                        type="button"
+                        class="btn btn-outline-primary"
+                        ngbTooltip="Dieses Set veröffentlichen"
+                        (click)="makeSetPublic()"
+                    >
+                        <i class="bi bi-globe"></i>
+                    </button>
+                }
+                <button
+                    class="btn btn-outline-danger"
+                    type="button"
+                    (click)="deleteSet()"
+                >
+                    <i class="bi bi-trash"></i>
+                </button>
+            </ng-template>
+        </li>
+
+        <li [ngbNavItem]="4">
+            <button ngbNavLink>Versionshistorie</button>
+            <ng-template ngbNavContent>
+                <p>
+                    Sed commodo, leo at suscipit dictum, quam est porttitor
+                    sapien, eget sodales nibh elit id diam. Nulla facilisi.
+                    Donec egestas ligula vitae odio interdum aliquet. Duis
+                    lectus turpis, luctus eget tincidunt eu, congue et odio.
+                    Duis pharetra et nisl at faucibus. Quisque luctus pulvinar
+                    arcu, et molestie lectus ultrices et. Sed diam urna, egestas
+                    ut ipsum vel, volutpat volutpat neque. Praesent fringilla
+                    tortor arcu. Vivamus faucibus nisl enim, nec tristique ipsum
+                    euismod facilisis. Morbi ut bibendum est, eu tincidunt odio.
+                    Orci varius natoque penatibus et magnis dis parturient
+                    montes, nascetur ridiculus mus. Mauris aliquet odio ac lorem
+                    aliquet ultricies in eget neque. Phasellus nec tortor vel
+                    tellus pulvinar feugiat.
+                </p>
+            </ng-template>
+        </li>
+    </ul>
+
+    <div [ngbNavOutlet]="nav" class="mt-2"></div>
 }

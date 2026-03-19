@@ -1,12 +1,13 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
-import { Marketplace, VersionedCollectionPartial } from 'fuesim-digital-shared';
+import { CollectionDto, CollectionEntityId, CollectionVersionId, ElementEntityId, Marketplace, VersionedCollectionPartial } from 'fuesim-digital-shared';
 import { BehaviorSubject, lastValueFrom } from 'rxjs';
 import { httpOrigin } from './api-origins';
 import { MessageService } from './messages/message.service';
+import { Collection } from 'ol';
 
 export type ExerciseElementSetSubscriptionData = {
-    collection: Marketplace.Set.Dto;
+    collection: CollectionDto,
     objects: typeof Marketplace.Set.GetLatestElementsBySetVersionId.Response;
 };
 
@@ -18,9 +19,9 @@ export class CollectionService {
     private readonly messageService = inject(MessageService);
 
     public readonly ENDPOINT = httpOrigin + '/api/collections';
-    private _elementSets = signal<Marketplace.Set.Dto[]>([]);
+    private _elementSets = signal<CollectionDto[]>([]);
     private _elementSetSubscriptions = new Map<
-        Marketplace.Set.EntityId,
+    CollectionEntityId,
         BehaviorSubject<ExerciseElementSetSubscriptionData | null>
     >();
 
@@ -29,23 +30,23 @@ export class CollectionService {
     }
 
     private updateCollectionVersion(
-        setEntityId: Marketplace.Set.EntityId,
-        newSetVersionId: Marketplace.Set.VersionId
+        setEntityId: CollectionEntityId,
+        newSetVersionId: CollectionVersionId
     ) {
         this._elementSets.update((val) =>
             val.map((m) =>
                 m.entityId === setEntityId
                     ? {
-                          ...m,
-                          versionId: newSetVersionId,
-                      }
+                        ...m,
+                        versionId: newSetVersionId,
+                    }
                     : m
             )
         );
     }
 
     public subscribeToCollection(
-        setEntityId: Marketplace.Set.EntityId,
+        setEntityId: CollectionEntityId,
         callback: (data: ExerciseElementSetSubscriptionData) => void
     ): () => void {
         let collectionEventSource = new EventSource(
@@ -190,7 +191,7 @@ export class CollectionService {
             );
             this.messageService.postError({
                 title: 'Verbindungsfehler',
-                body: "Die Verbindung zum Server wurde unterbrochen. Bitte überprüfen Sie Ihre Internetverbindung und laden Sie die Seite neu.",
+                body: 'Die Verbindung zum Server wurde unterbrochen. Bitte überprüfen Sie Ihre Internetverbindung und laden Sie die Seite neu.',
             });
         };
         const firstValue = this._elementSetSubscriptions
@@ -227,7 +228,7 @@ export class CollectionService {
     }
 
     public async getLatestCollectionVersionByEntityId(
-        entityId: Marketplace.Set.EntityId
+        entityId: CollectionEntityId
     ) {
         const data = await lastValueFrom(
             this.httpClient.get<typeof Marketplace.Set.GetByEntityId.Response>(
@@ -239,7 +240,7 @@ export class CollectionService {
     }
 
     public async getLatestElementsByCollectionId(
-        setId: Marketplace.Set.EntityId
+        setId: CollectionEntityId
     ) {
         const data = await lastValueFrom(
             this.httpClient.get<
@@ -253,16 +254,21 @@ export class CollectionService {
     }
 
     public async deleteElement(
-        elementEntityId: Marketplace.Element.EntityId,
-        setEntityId: Marketplace.Set.EntityId
+        elementEntityId: ElementEntityId,
+        setEntityId: CollectionEntityId
     ) {
         const result = await lastValueFrom(
             this.httpClient.delete<typeof Marketplace.Element.Delete.Response>(
-                `${this.ENDPOINT}/${setEntityId}/entity/${elementEntityId}`
+                `${this.ENDPOINT}/${setEntityId}/element/${elementEntityId}`
             )
         );
-
-        this.updateCollectionVersion(setEntityId, result.newSetVersionId);
+        //TODO: Make this interface nicer / with confirm button
+        if (result.requiresConfirmation.length > 0) {
+            this.messageService.postError({
+                title: "Entfernen nicht möglich",
+                body: `Zu löschendes Element muss zuerst aus folgenden anderen Elementen entfernt werden: ${result.requiresConfirmation.map(e => e.element.title).join(", ")}.`,
+            })
+        }
     }
 
     public async createColletion(title: string) {
@@ -282,7 +288,7 @@ export class CollectionService {
     }
 
     public async createElement(
-        setEntityId: Marketplace.Set.EntityId,
+        setEntityId: CollectionEntityId,
         content: object
     ) {
         const data = await lastValueFrom(
@@ -297,24 +303,27 @@ export class CollectionService {
         return data.result;
     }
 
-    public async getElementVersions(entityId: Marketplace.Element.EntityId) {
+    public async getElementVersions(
+        collection: CollectionEntityId,
+        entityId: ElementEntityId
+    ) {
         const data = await lastValueFrom(
             this.httpClient.get<
                 typeof Marketplace.Element.GetByEntityId.Response
-            >(`${this.ENDPOINT}/object/${entityId}/versions`)
+            >(`${this.ENDPOINT}/${collection}/element/${entityId}/versions`)
         );
 
         return data.result;
     }
 
     public async updateElement(
-        entityId: Marketplace.Element.EntityId,
+        entityId: ElementEntityId,
         content: object,
-        setEntityId: Marketplace.Set.EntityId
+        setEntityId: CollectionEntityId,
     ) {
         const data = await lastValueFrom(
             this.httpClient.put<typeof Marketplace.Element.Edit.Response>(
-                `${this.ENDPOINT}/${setEntityId}/entity/${entityId}`,
+                `${this.ENDPOINT}/${setEntityId}/element/${entityId}`,
                 Marketplace.Element.Edit.requestSchema.parse({
                     data: content,
                 })
@@ -324,7 +333,7 @@ export class CollectionService {
         return data.result;
     }
 
-    public async makeCollectionPublic(setEntityId: Marketplace.Set.EntityId) {
+    public async makeCollectionPublic(setEntityId: CollectionEntityId) {
         const data = await lastValueFrom(
             this.httpClient.post<
                 typeof Marketplace.Set.ChangeVisibility.Response
@@ -348,8 +357,8 @@ export class CollectionService {
     }
 
     public async duplicateCollection(
-        setVersionId: Marketplace.Set.EntityId,
-        specificSetVersionId: Marketplace.Set.VersionId
+        setVersionId: CollectionEntityId,
+        specificSetVersionId: CollectionVersionId,
     ) {
         const data = await lastValueFrom(
             this.httpClient.post<typeof Marketplace.Set.Duplicate.Response>(
@@ -365,7 +374,7 @@ export class CollectionService {
             parsedData.createdSet,
         ]);
     }
-    public async deleteCollection(setEntityId: Marketplace.Set.EntityId) {
+    public async deleteCollection(setEntityId: CollectionEntityId) {
         await lastValueFrom(
             this.httpClient.delete(`${this.ENDPOINT}/${setEntityId}/entity`)
         );
@@ -376,8 +385,8 @@ export class CollectionService {
     }
 
     public async addCollectionDependency(opts: {
-        importTo: Marketplace.Set.EntityId;
-        importFrom: Marketplace.Set.VersionId;
+        importTo: CollectionEntityId,
+        importFrom: CollectionVersionId,
     }) {
         const data = await lastValueFrom(
             this.httpClient.post<typeof Marketplace.Set.Import.Response>(
@@ -388,8 +397,8 @@ export class CollectionService {
     }
 
     public async removeCollectionDependency(opts: {
-        removeFrom: Marketplace.Set.EntityId;
-        removeVersionId: Marketplace.Set.VersionId;
+        removeFrom: CollectionEntityId,
+        removeVersionId: CollectionVersionId,
     }) {
         await lastValueFrom(
             this.httpClient.delete(
@@ -398,17 +407,21 @@ export class CollectionService {
         );
     }
 
-    public async saveDraftState(collectionEntityId: Marketplace.Set.EntityId) {
+    public async saveDraftState(collectionEntityId: CollectionEntityId) {
         const data = await lastValueFrom(
             this.httpClient.post<
                 typeof Marketplace.Set.SaveDraftState.Response
             >(`${this.ENDPOINT}/${collectionEntityId}/save`, {})
         );
 
-        const parsedData = Marketplace.Set.SaveDraftState.responseSchema.parse(data);
+        const parsedData =
+            Marketplace.Set.SaveDraftState.responseSchema.parse(data);
 
-        if(parsedData.saved === false || parsedData.result === null) {
-            this.messageService.postError({title: "Sammlung konnte nicht gespeichert werden", body: "Probieren Sie es erneut oder laden Sie die Seite neu."})
+        if (parsedData.saved === false || parsedData.result === null) {
+            this.messageService.postError({
+                title: 'Sammlung konnte nicht gespeichert werden',
+                body: 'Probieren Sie es erneut oder laden Sie die Seite neu.',
+            });
             return;
         }
 
@@ -462,9 +475,9 @@ export class CollectionService {
     ): Promise<
         | { newerVersionAvailable: false }
         | {
-              newerVersionAvailable: true;
-              latestVersion: VersionedCollectionPartial;
-          }
+            newerVersionAvailable: true;
+            latestVersion: VersionedCollectionPartial;
+        }
     > {
         const latestCollection =
             await this.getLatestCollectionVersionByEntityId(

@@ -11,7 +11,7 @@
                         track version.versionId
                     ) {
                         @let isCurrentVersion =
-                            version.version === data.currentVersion;
+                            version.version === data.element.version;
                         @let isSelectedVersion =
                             version.version === selectedVersion();
                         <li
@@ -60,12 +60,11 @@
                 @case ('alarmGroup') {
                     <app-alarmgroup-element-modal
                         [data]="data"
-                        (submit)="submit($event)"
-                    />
-                }
-                @case ($any('dependingObject')) {
-                    <app-depending-object-modal
-                        [collectionVersionId]="data.collectionVersionId"
+                        [btnText]="
+                            data.isEditMode
+                                ? 'Änderungen speichern'
+                                : 'Alarmgruppe hinzufügen'
+                        "
                         (submit)="submit($event)"
                     />
                 }

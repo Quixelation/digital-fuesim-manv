@@ -5,7 +5,7 @@ import { MarketplaceLayoutComponent } from './marketplace-layout/marketplace-lay
 import { MarketplaceComponent } from './marketplace/marketplace.component';
 import { MarketplaceSetDetailComponent } from './marketplace-set-detail/marketplace-set-detail.component';
 
-const routes: Routes = [
+export const routes: Routes = [
     {
         path: '',
         component: MarketplaceLayoutComponent,
@@ -21,9 +21,3 @@ const routes: Routes = [
         ],
     },
 ];
-
-@NgModule({
-    imports: [RouterModule.forChild(routes)],
-    exports: [RouterModule],
-})
-export class MarketplaceRoutingModule {}

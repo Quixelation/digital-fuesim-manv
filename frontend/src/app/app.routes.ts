@@ -23,8 +23,8 @@ export const appRoutes: Routes = [
         path: 'marketplace',
         // eslint-disable-next-line @typescript-eslint/promise-function-async
         loadChildren: () =>
-            import('./pages/marketplace/marketplace.module').then(
-                (m) => m.MarketplaceModule
+            import('./pages/marketplace/marketplace.routes').then(
+                (m) => m.routes
             ),
     },
     {

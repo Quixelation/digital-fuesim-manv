@@ -1,14 +1,22 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
-import { Marketplace } from 'fuesim-digital-shared';
+import {
+    ElementDto,
+    Marketplace,
+    VersionedCollectionPartial,
+    VersionedElementContent,
+} from 'fuesim-digital-shared';
 import { CollectionService } from '../../../../core/exercise-element.service';
+import { VehicleTemplateFormMarketplaceComponent } from '../vehicle-template-form/vehicle-template-form.component';
+import { AlarmgroupElementModalComponent } from '../alarmgroup-element-modal/alarmgroup-element-modal.component';
+import { LocaleDatePipe } from '../../../../shared/pipes/localeDate.pipe';
 
 export interface SharedVersionedElementModalData<T> {
     onSubmit: (values: T) => void;
-    type: Marketplace.ExerciseElementObjectUnion['type'];
-    collectionVersionId: Marketplace.Set.VersionId;
+    type: VersionedElementContent['type'];
+    collection: VersionedCollectionPartial;
     isEditMode: boolean;
-    availableCollectionElements: Marketplace.Element.Dto[];
+    availableCollectionElements: ElementDto[];
 }
 
 export interface CreatingVersionedElementModalData<T>
@@ -18,11 +26,8 @@ export interface CreatingVersionedElementModalData<T>
 
 export interface EditingVersionedElementModalData<T>
     extends SharedVersionedElementModalData<T> {
-    collectionEntityId: Marketplace.Set.EntityId;
     isEditMode: true;
-    elementEntityId: Marketplace.Element.EntityId;
-    currentVersion: number;
-    editableTemplateValues: T;
+    element: ElementDto;
 }
 
 export type VersionedElementModalData<T> =
@@ -31,6 +36,11 @@ export type VersionedElementModalData<T> =
 
 @Component({
     selector: 'app-versioned-element-modal',
+    imports: [
+        VehicleTemplateFormMarketplaceComponent,
+        AlarmgroupElementModalComponent,
+        LocaleDatePipe,
+    ],
     templateUrl: './versioned-element-modal.component.html',
     styleUrl: './versioned-element-modal.component.scss',
 })
@@ -49,58 +59,44 @@ export class VersionedElementModalComponent {
         return this.findVersionData(this.selectedVersion()!);
     });
 
-    public readonly versionHistory = signal<Marketplace.Element.Dto[] | null>(
-        null
-    );
+    public readonly versionHistory = signal<ElementDto[] | null>(null);
 
     public async selectVersion(version: number) {
         this.selectedVersion.set(version);
     }
 
-    public editableValues = signal<any>(null);
-
     public findVersionData(version: number) {
-        console.log('Finding version data for version', version);
         const versionData = this.versionHistory()
             ? this.versionHistory()!.find((v) => v.version === version)
             : null;
+
         if (!versionData) {
             throw new Error('Version data not found for version ' + version);
         }
 
-        console.log('versionData', versionData);
         return {};
     }
 
     public async ngOnInit() {
-        if (this.data.isEditMode !== true) {
-            return;
-        }
+        if (this.data.isEditMode) {
+            const versionData = await this.collectionService.getElementVersions(
+                this.data.collection.entityId,
+                this.data.element.entityId
+            );
+            this.versionHistory.set(versionData);
 
-        this.editableValues.set(this.data.editableTemplateValues);
-
-        if (Marketplace.Element.isEntityId(this.data.elementEntityId)) {
-            console.error('Invalid entityId', this.data.elementEntityId);
-            this.close();
-            return;
-        }
-
-        const versionData = await this.collectionService.getElementVersions(
-            this.data.elementEntityId
-        );
-        this.versionHistory.set(versionData);
-
-        if (
-            this.selectedVersion() === null &&
-            this.data.currentVersion !== null
-        ) {
-            this.selectedVersion.set(this.data.currentVersion);
+            if (
+                this.selectedVersion() === null &&
+                this.data.element.version !== null
+            ) {
+                this.selectedVersion.set(this.data.element.version);
+            }
         }
     }
 
     public async submit(data: any) {
-        console.log('Submitting data', data);
         this.data.onSubmit(data);
+        this.close();
     }
 
     private close() {
