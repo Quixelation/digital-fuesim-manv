@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { isAuthenticatedMiddleware } from '../utils/http-handlers.js';
-import { isCollectionEntityId, isCollectionVersionId, isElementEntityId, Marketplace } from 'fuesim-digital-shared';
+import {
+    isCollectionEntityId,
+    isCollectionVersionId,
+    isElementEntityId,
+    isElementVersionId,
+    Marketplace,
+} from 'fuesim-digital-shared';
 import { NotFoundError } from '../utils/http.js';
 import { CollectionService } from '../database/services/collection-service.js';
 import { CollectionEventSender } from '../collections/collection-event-sender.js';
@@ -23,11 +29,10 @@ export function createCollectionsRouter(collectionService: CollectionService) {
     router.get('/my', async (req, res) => {
         const includeDraftState = req.query['includeDraftState'] === 'true';
 
-        const result =
-            await collectionService.getLatestExerciseElementSetsForUser(
-                req.session!.user.id,
-                { includeDraftState }
-            );
+        const result = await collectionService.getLatestCollectionsForUser(
+            req.session!.user.id,
+            { includeDraftState }
+        );
 
         return res.send(
             Marketplace.Set.LoadMy.responseSchema.encode({
@@ -42,7 +47,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
     router.post('/create', async (req, res) => {
         const parsedBody = Marketplace.Set.Create.requestSchema.parse(req.body);
 
-        const result = await collectionService.createExerciseSet(
+        const result = await collectionService.createCollection(
             parsedBody.title,
             req.session!.user.id
         );
@@ -97,6 +102,30 @@ export function createCollectionsRouter(collectionService: CollectionService) {
 
         return res.send(
             Marketplace.Set.GetByEntityId.responseSchema.encode({
+                result,
+            })
+        );
+    });
+
+    router.patch('/:setEntityId', async (req, res) => {
+        const { setEntityId } = req.params;
+        if (!isCollectionEntityId(setEntityId)) {
+            throw new Error('Invalid exercise element set version id');
+        }
+
+        const parsedBody = Marketplace.Set.Edit.requestSchema.parse(req.body);
+
+        const result = await collectionService.updateCollectionMetadata(
+            setEntityId,
+            parsedBody
+        );
+
+        if (!result) {
+            throw new Error('Failed to update exercise element set metadata');
+        }
+
+        res.send(
+            Marketplace.Set.Edit.responseSchema.encode({
                 result,
             })
         );
@@ -157,6 +186,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
                         collection: data.collection,
                         elements: data.elements,
                     },
+                    newCollectionVersionId: data.newCollectionVersion.versionId,
                 })
             );
         }
@@ -270,7 +300,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             }
 
             const createdSet =
-                await collectionService.duplicateExerciseElementSetVersion(
+                await collectionService.duplicateCollectionVersion(
                     setVersionId,
                     req.session!.user.id
                 );
@@ -340,7 +370,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
         if (!isCollectionEntityId(setEntityId)) {
             throw new Error('Invalid exercise element set version id');
         }
-        await collectionService.deleteExerciseElementSet(setEntityId);
+        await collectionService.deleteCollection(setEntityId);
         res.sendStatus(204);
     });
 
@@ -371,6 +401,33 @@ export function createCollectionsRouter(collectionService: CollectionService) {
         );
     });
 
+
+    router.post('/:collectionEntityId/element/:elementEntityId/version/:elementVersionId/duplicate', async (req, res) => {
+        const { elementVersionId, collectionEntityId } = req.params;
+        if(!isCollectionEntityId(collectionEntityId)) {
+            throw new Error('Invalid exercise element set entity id');
+        }
+        if (!isElementVersionId(elementVersionId)) {
+            throw new Error('Invalid exercise element object entity id');
+        }
+
+        const data = await collectionService.duplicateElementVersion(
+            elementVersionId,
+            collectionEntityId,
+        );
+
+        if (!data) {
+            throw new Error('Failed to duplicate exercise element object');
+        }
+
+        res.send(
+            Marketplace.Element.Duplicate.responseSchema.encode({
+                newSetVersionId: data.draftState.versionId,
+                result: data.duplicatedElement,
+            })
+        );
+    });
+
     router.delete(
         '/:setEntityId/element/:elementEntityId',
         async (req, res) => {
@@ -389,7 +446,7 @@ export function createCollectionsRouter(collectionService: CollectionService) {
             return res.send(
                 Marketplace.Element.Delete.responseSchema.encode({
                     newSetVersionId: deletionResult.newSetVersionId,
-                    requiresConfirmation: deletionResult.requiresConfirmation
+                    requiresConfirmation: deletionResult.requiresConfirmation,
                 })
             );
         }

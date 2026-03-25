@@ -1,4 +1,14 @@
-import { CollectionDto, CollectionEntityId, CollectionVersionId, CollectionVisibility, ElementEntityId, ElementVersionId, ExerciseState, Marketplace, VersionedElementContent } from 'fuesim-digital-shared';
+import {
+    CollectionDto,
+    CollectionEntityId,
+    CollectionVersionId,
+    CollectionVisibility,
+    ElementEntityId,
+    ElementVersionId,
+    ExerciseState,
+    Marketplace,
+    VersionedElementContent,
+} from 'fuesim-digital-shared';
 import {
     collectionDependencyMappingTable,
     elementCollectionMappingTable,
@@ -137,10 +147,10 @@ export class CollectionRepository extends BaseRepository {
                 newCollection.versionId
             );
 
-            await this.copyDependenciesBetweenCollections(
-                latestVersion.versionId,
-                newCollection.versionId
-            );
+            await this.copyDependenciesBetweenCollections({
+                sourceVersion: latestVersion.versionId,
+                targetVersion: newCollection.versionId,
+            });
 
             return [newCollection, true];
         }
@@ -148,28 +158,20 @@ export class CollectionRepository extends BaseRepository {
         return [this.strict(result), false];
     }
 
-    public async getCollectionVersionDependencies(
-        collectionVersionId: CollectionVersionId,
+    public async getCollectionVersionDirectDependencies(
+        collectionVersionId: CollectionVersionId
     ) {
-        return await this.databaseConnection
-            .select(getTableColumns(collectionDependencyMappingTable))
-            .from(collectionTable)
-            .innerJoin(
-                collectionDependencyMappingTable,
-                eq(
-                    collectionTable.versionId,
-                    collectionDependencyMappingTable.dependentCollectionVersionId
-                )
-            )
+        const data = await this.databaseConnection
+            .select()
+            .from(collectionDependencyMappingTable)
             .where(
-                and(
-                    eq(collectionTable.versionId, collectionVersionId),
-                    eq(
-                        collectionDependencyMappingTable.dependentCollectionVersionId,
-                        collectionVersionId
-                    )
+                eq(
+                    collectionDependencyMappingTable.dependentCollectionVersionId,
+                    collectionVersionId
                 )
             );
+
+        return data;
     }
 
     public async removeCollectionVersionDependency(
@@ -203,15 +205,17 @@ export class CollectionRepository extends BaseRepository {
             await this.getCollectionByVersionId(dependencyCollectionVersionId)
         );
 
-        return await this.databaseConnection
-            .insert(collectionDependencyMappingTable)
-            .values({
-                collectionVersionId: dependency.versionId,
-                collectionEntityId: dependency.entityId,
-                dependentCollectionVersionId: dependent.versionId,
-                dependentCollectionEntityId: dependent.entityId,
-            })
-            .returning();
+        return this.onlySingle(
+            await this.databaseConnection
+                .insert(collectionDependencyMappingTable)
+                .values({
+                    collectionVersionId: dependency.versionId,
+                    collectionEntityId: dependency.entityId,
+                    dependentCollectionVersionId: dependent.versionId,
+                    dependentCollectionEntityId: dependent.entityId,
+                })
+                .returning()
+        );
     }
 
     private async checkElementVersionEditable(
@@ -239,6 +243,31 @@ export class CollectionRepository extends BaseRepository {
             mappings.every(
                 (mapping) => mapping.exercise_element_sets.draftState === true
             )
+        );
+    }
+
+    public async updateCollectionData(
+        collectionVersionId: CollectionVersionId,
+        data: Marketplace.Set.EditableCollectionProperties
+    ) {
+        const collection = this.strict(
+            await this.getCollectionByVersionId(collectionVersionId)
+        );
+        if (collection.draftState === false) {
+            throw new Error(
+                'Cannot edit collection that is not in draft state'
+            );
+        }
+
+        return this.onlySingle(
+            await this.databaseConnection
+                .update(collectionTable)
+                .set({
+                    title: data.title,
+                    description: data.description,
+                })
+                .where(eq(collectionTable.versionId, collectionVersionId))
+                .returning()
         );
     }
 
@@ -305,7 +334,7 @@ export class CollectionRepository extends BaseRepository {
     }
 
     public async createElementVersion(data: {
-        content: VersionedElementContent,
+        content: VersionedElementContent;
         version: number;
         entityId?: ElementEntityId;
     }) {
@@ -390,7 +419,7 @@ export class CollectionRepository extends BaseRepository {
                 )
             );
 
-        return await this.databaseConnection
+        return this.databaseConnection
             .insert(elementCollectionMappingTable)
             .values({
                 setEntityId: set.entityId,
@@ -402,27 +431,43 @@ export class CollectionRepository extends BaseRepository {
             .returning();
     }
 
-    public async copyDependenciesBetweenCollections(
-        sourceCollectionVersionId: CollectionVersionId,
-        targetCollectionVersionId: CollectionVersionId
-    ) {
+    public async copyDependenciesBetweenCollections(data: {
+        sourceVersion: CollectionVersionId;
+        targetVersion: CollectionVersionId;
+    }) {
+        const {
+            sourceVersion: sourceCollectionVersionId,
+            targetVersion: targetCollectionVersionId,
+        } = data;
+
         const targetCollection = this.strict(
             await this.getCollectionByVersionId(targetCollectionVersionId)
         );
-        const dependencies = await this.getCollectionVersionDependencies(
+        const dependencies = await this.getCollectionVersionDirectDependencies(
             sourceCollectionVersionId
         );
 
         await this.databaseConnection.transaction(async (tx) => {
+            const inserts = [];
             for (const dependency of dependencies) {
-                await tx.insert(collectionDependencyMappingTable).values({
-                    collectionVersionId: dependency.collectionVersionId,
-                    collectionEntityId: dependency.collectionEntityId,
-                    dependentCollectionVersionId: targetCollection.versionId,
-                    dependentCollectionEntityId: targetCollection.entityId,
-                });
+                inserts.push(
+                    tx.insert(collectionDependencyMappingTable).values({
+                        collectionVersionId: dependency.collectionVersionId,
+                        collectionEntityId: dependency.collectionEntityId,
+                        dependentCollectionVersionId:
+                            targetCollection.versionId,
+                        dependentCollectionEntityId: targetCollection.entityId,
+                    })
+                );
             }
+            return Promise.all(inserts);
         });
+
+        console.log(
+            await this.getCollectionVersionDirectDependencies(
+                targetCollectionVersionId
+            )
+        );
     }
 
     public async copyReferencesBetweenCollections(
@@ -489,6 +534,7 @@ export class CollectionRepository extends BaseRepository {
             const latestElements = this.latestElements();
 
             const createdElements = await tx
+                .with(latestElements)
                 .insert(elementTable)
                 .select(
                     tx
@@ -533,15 +579,17 @@ export class CollectionRepository extends BaseRepository {
                 )
                 .returning();
 
-            await tx.insert(elementCollectionMappingTable).values(
-                createdElements.map((element) => ({
-                    setEntityId: target.entityId,
-                    setVersionId: target.versionId,
-                    elementEntityId: element.entityId,
-                    elementVersionId: element.versionId,
-                    isBaseReference: false,
-                }))
-            );
+            if (createdElements.length > 0) {
+                await tx.insert(elementCollectionMappingTable).values(
+                    createdElements.map((element) => ({
+                        setEntityId: target.entityId,
+                        setVersionId: target.versionId,
+                        elementEntityId: element.entityId,
+                        elementVersionId: element.versionId,
+                        isBaseReference: false,
+                    }))
+                );
+            }
         });
     }
 
@@ -562,9 +610,7 @@ export class CollectionRepository extends BaseRepository {
             .where(eq(elementTable.versionId, elementVersionId));
     }
 
-    public async getCollectionByVersionId(
-        versionId: CollectionVersionId
-    ) {
+    public async getCollectionByVersionId(versionId: CollectionVersionId) {
         const result = await this.databaseConnection
             .select()
             .from(collectionTable)
@@ -608,11 +654,10 @@ export class CollectionRepository extends BaseRepository {
             );
     }
 
-    public async getLatestElementVersion(
-        entityId: ElementEntityId
-    ) {
+    public async getLatestElementVersion(entityId: ElementEntityId) {
         const latestElements = this.latestElements();
         const result = await this.databaseConnection
+            .with(latestElements)
             .select()
             .from(latestElements)
             .where(eq(latestElements.entityId, entityId));

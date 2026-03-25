@@ -1,12 +1,9 @@
-import z from "zod";
-import { stateVersionedEntitySchema } from "./state-versioned-entity.js";
+import z from 'zod';
+import { stateVersionedEntitySchema } from './state-versioned-entity.js';
 
 export const collectionVisibilitySchema = z.enum(['private', 'public']);
 
-export type CollectionVisibility = z.infer<
-    typeof collectionVisibilitySchema
->;
-
+export type CollectionVisibility = z.infer<typeof collectionVisibilitySchema>;
 
 export const collectionEntityIdSchema = z
     .string()
@@ -23,7 +20,9 @@ export const collectionVersionIdSchema = z
     .regex(/^set_version_.+$/u)
     .brand<'SetVersionId'>();
 export type CollectionVersionId = z.infer<typeof collectionVersionIdSchema>;
-export const isCollectionVersionId = (value: string): value is CollectionVersionId =>
+export const isCollectionVersionId = (
+    value: string
+): value is CollectionVersionId =>
     collectionVersionIdSchema.safeParse(value).success;
 
 export const collectionDtoSchema = z.object({
@@ -39,7 +38,6 @@ export const collectionDtoSchema = z.object({
 
 export type CollectionDto = z.infer<typeof collectionDtoSchema>;
 
-
 export const versionedCollectionPartialSchema = z.strictObject({
     entityId: collectionEntityIdSchema,
     versionId: collectionVersionIdSchema,
@@ -47,4 +45,3 @@ export const versionedCollectionPartialSchema = z.strictObject({
 export type VersionedCollectionPartial = z.infer<
     typeof versionedCollectionPartialSchema
 >;
-

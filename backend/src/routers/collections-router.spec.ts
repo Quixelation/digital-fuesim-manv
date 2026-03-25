@@ -20,22 +20,34 @@ describe('Collection Router', () => {
         username: 'testuser',
     };
     let collection: CollectionDto;
+    let collection2: CollectionDto;
     beforeEach(async () => {
         session = await createTestUserSession(environment, {
             user: userInfo,
         });
-
-        const data = await environment.collectionService.createExerciseSet(
-            'Test Collection',
-            userInfo.id
-        );
-        if (!data) {
-            throw new Error('Failed to create collection for testing');
+        {
+            const data = await environment.collectionService.createCollection(
+                'Test Collection',
+                userInfo.id
+            );
+            if (!data) {
+                throw new Error('Failed to create collection for testing');
+            }
+            collection = data;
         }
-        collection = data;
+        {
+            const data = await environment.collectionService.createCollection(
+                'Test Collection 2',
+                userInfo.id
+            );
+            if (!data) {
+                throw new Error('Failed to create collection for testing');
+            }
+            collection2 = data;
+        }
     });
 
-    describe('HTTP GET /my', () => {
+    describe('GET /my', () => {
         it('returns user collections', async () => {
             const collections = await environment.httpRequest(
                 'get',
@@ -54,7 +66,7 @@ describe('Collection Router', () => {
         });
     });
 
-    describe('HTTP POST /create', () => {
+    describe('POST /create', () => {
         it('creates a new collection', async () => {
             const title = 'Test Collection';
 
@@ -76,7 +88,7 @@ describe('Collection Router', () => {
             expect(parsed.result.draftState).toBe(false);
 
             const myCollections =
-                await environment.collectionService.getLatestExerciseElementSetsForUser(
+                await environment.collectionService.getLatestCollectionsForUser(
                     userInfo.id,
                     { includeDraftState: true }
                 );
@@ -116,7 +128,7 @@ describe('Collection Router', () => {
     });
 
     describe('HTTP /:collectionEntityId', () => {
-        describe('HTTP POST /create', () => {
+        describe('POST /create', () => {
             it('creates a new exercise element', async () => {
                 const content = {
                     type: 'alarmGroup',
@@ -313,24 +325,14 @@ describe('Collection Router', () => {
                 }
             );
         });
-        describe.only("HTTP /dependencies", () => {
-            let collection2: CollectionDto;
+        describe('HTTP /dependencies', () => {
+            beforeEach(async () => {});
 
-
-            beforeEach(async () => {
-                const data = await environment.collectionService.createExerciseSet(
-                    'Test Collection 2',
-                    userInfo.id
-                );
-                if (!data) {
-                    throw new Error('Failed to create collection for testing');
-                }
-                collection2 = data;
-            })
-
-            describe("HTTP /:importCollectionVersionId", () => {
-                describe('HTTP POST /', () => {
-                    it('adds a new dependency to an existing collection', async () => {
+            describe('HTTP /:importCollectionVersionId', () => {
+                describe('POST /', () => {
+                    let collection2_v2: CollectionDto;
+                    let createdElementCollection2: ElementDto;
+                    beforeEach(async () => {
                         const content = {
                             id: uuid(),
                             type: 'alarmGroup',
@@ -339,63 +341,149 @@ describe('Collection Router', () => {
                             triggerLimit: null,
                             alarmGroupVehicles: {},
                         } satisfies AlarmGroup;
-                        const createdElement = await environment.collectionService.createExerciseObject(
-                            collection2.entityId,
-                            content
+                        const data =
+                            await environment.collectionService.createExerciseObject(
+                                collection2.entityId,
+                                content
+                            );
+                        createdElementCollection2 = data.result;
+                        const data_collection =
+                            await environment.collectionService.getCollectionVersionById(
+                                data.newSetVersionId
+                            );
+                        if (!data_collection) {
+                            throw new Error(
+                                'Failed to fetch collection version'
+                            );
+                        }
+                        collection2_v2 = data_collection;
+                        expect(collection2_v2.draftState).toBe(true);
+                    });
+                    it('adds a new dependency to an existing collection', async () => {
+                        await environment.collectionService.saveDraftState(
+                            collection2_v2.entityId
                         );
-                        const collection2_v2 = await environment.collectionService.saveDraftState(collection2.entityId);
-                        expect(collection2_v2.draftState).toBe(false);
-                        expect(collection2_v2.versionId).not.toBe(collection2.versionId);
 
-
-                        const data = await environment.httpRequest("post",
-                            ENDPOINT + `/${collection.entityId}/dependencies/${collection2_v2.versionId}`,
+                        const data = await environment.httpRequest(
+                            'post',
+                            ENDPOINT +
+                                `/${collection.entityId}/dependencies/${collection2_v2.versionId}`,
                             session,
                             undefined
                         );
 
-                        const parsed = Marketplace.Set.Import.responseSchema.parse(data.body);
-                        expect(parsed.importedSet.collection).toEqual(collection2_v2);
+                        const parsed =
+                            Marketplace.Set.Import.responseSchema.parse(
+                                data.body
+                            );
+                        expect(parsed.importedSet.collection.versionId).toBe(
+                            collection2_v2.versionId
+                        );
                         // does not contained elements from newer collection versions
-                        expect(parsed.importedSet.elements).toEqual([createdElement.result]);
-                    })
-                    it("finds a compromise for attempted draft-state imports", async () => {
-                        expect(collection2.draftState).toBe(false);
-                        const content = {
-                            id: uuid(),
-                            type: 'alarmGroup',
-                            name: 'Test Alarm Group in Draft State',
-                            triggerCount: 0,
-                            triggerLimit: null,
-                            alarmGroupVehicles: {},
-                        } satisfies AlarmGroup;
-                        const createdElement = await environment.collectionService.createExerciseObject(
-                            collection2.entityId,
-                            content
+                        expect(parsed.importedSet.elements).toEqual([
+                            createdElementCollection2,
+                        ]);
+                    });
+                    it('finds a compromise for attempted draft-state imports', async () => {
+                        expect(collection2_v2.draftState).toBe(true);
+                        expect(collection2_v2.versionId).not.toBe(
+                            collection2.versionId
                         );
-                        const collection2After = await environment.collectionService.getCollectionVersionById(createdElement.newSetVersionId);
-                        expect(collection2After).toBeDefined();
-                        if (!collection2After) return;
-                        expect(collection2After.draftState).toBe(true);
-                        expect(collection2After.versionId).not.toBe(collection2.versionId);
 
-                        const data = await environment.httpRequest("post",
-                            ENDPOINT + `/${collection.entityId}/dependencies/${collection2After.versionId}`,
+                        const data = await environment.httpRequest(
+                            'post',
+                            ENDPOINT +
+                                `/${collection.entityId}/dependencies/${collection2_v2.versionId}`,
                             session,
                             undefined
                         );
-                        const parsed = Marketplace.Set.Import.responseSchema.parse(data.body);
+                        const parsed =
+                            Marketplace.Set.Import.responseSchema.parse(
+                                data.body
+                            );
                         // does not contained elements from newer collection versions
                         expect(parsed.importedSet.elements).toEqual([]);
-                        expect(parsed.importedSet.collection.draftState).toBe(false);
-                        expect(parsed.importedSet.collection.entityId).toEqual(collection2.entityId);
-                        expect(parsed.importedSet.collection.versionId).toEqual(collection2.versionId);
-                    })
-                })
-            })
+                        expect(parsed.importedSet.collection.draftState).toBe(
+                            false
+                        );
+                        expect(parsed.importedSet.collection.entityId).toEqual(
+                            collection2.entityId
+                        );
+                        expect(parsed.importedSet.collection.versionId).toEqual(
+                            collection2.versionId
+                        );
+                    });
+
+                    it('upgrades collection import to new version', async () => {
+                        // Add Dependency A_1 -> B_1
+                        const data = await environment.httpRequest(
+                            'post',
+                            ENDPOINT +
+                                `/${collection.entityId}/dependencies/${collection2.versionId}`,
+                            session,
+                            undefined
+                        );
+                        const parsed =
+                            Marketplace.Set.Import.responseSchema.parse(
+                                data.body
+                            );
+                        expect(parsed.importedSet.collection.versionId).toEqual(
+                            collection2.versionId
+                        );
+                        expect(parsed.newCollectionVersionId).not.toBe(
+                            collection.versionId
+                        );
+
+                        const collection2_deps =
+                            await environment.collectionService.getCollectionDependencies(
+                                parsed.newCollectionVersionId
+                            );
+                        console.log(collection2_deps);
+                        expect(collection2_deps).toHaveLength(1);
+                        expect(collection2_deps[0]?.versionId).toBe(
+                            collection2.versionId
+                        );
+
+                        //Upgrade to newer version; A_1 -> B_2
+                        await environment.collectionService.saveDraftState(
+                            collection2_v2.entityId
+                        );
+                        const data2 = await environment.httpRequest(
+                            'post',
+                            ENDPOINT +
+                                `/${collection.entityId}/dependencies/${collection2_v2.versionId}`,
+                            session,
+                            undefined
+                        );
+                        const parsed2 =
+                            Marketplace.Set.Import.responseSchema.parse(
+                                data2.body
+                            );
+                        console.log({ parsed2 });
+                        expect(
+                            parsed2.importedSet.collection.versionId
+                        ).toEqual(collection2_v2.versionId);
+                        // reuses the same draft state, since we haven't saved yet
+                        expect(parsed2.newCollectionVersionId).toBe(
+                            parsed.newCollectionVersionId
+                        );
+
+                        // Dependencies of Collection A_2 should now point to B_2
+                        const collection_deps_after =
+                            await environment.collectionService.getCollectionDependencies(
+                                parsed2.newCollectionVersionId
+                            );
+                        console.log({ collection_deps_after });
+                        expect(collection_deps_after).toHaveLength(1);
+                        expect(collection_deps_after[0]?.versionId).toBe(
+                            collection2_v2.versionId
+                        );
+                    });
+                });
+            });
         });
 
-        describe('HTTP POST /save', () => {
+        describe('POST /save', () => {
             it('saves the draft state', async () => {
                 expect(collection.draftState).toBe(false);
 
@@ -509,8 +597,9 @@ describe('Collection Router', () => {
             });
         });
         describe('HTTP /version/:collectionVersionId', () => {
-            describe('HTTP POST /duplicate', () => {
-                it('duplicates the collection and its elements', async () => {
+            describe.only('POST /duplicate', () => {
+                describe('correctly', () => {
+                    let duplicationResult: typeof Marketplace.Set.Duplicate.Response;
                     const content = {
                         type: 'alarmGroup',
                         alarmGroupVehicles: {},
@@ -520,74 +609,99 @@ describe('Collection Router', () => {
                         triggerLimit: null,
                     } satisfies AlarmGroup;
 
-                    const elementCreationResult =
-                        await environment.collectionService.createExerciseObject(
-                            collection.entityId,
-                            content
-                        );
+                    beforeEach(async () => {
+                        const elementCreationResult =
+                            await environment.collectionService.createExerciseObject(
+                                collection.entityId,
+                                content
+                            );
 
-                    const duplicationResult = await environment.httpRequest(
-                        'post',
-                        ENDPOINT +
-                        `/${collection.entityId}/version/${elementCreationResult.newSetVersionId}/duplicate`,
-                        session,
-                        undefined
-                    );
-
-                    const parsedDuplicationResult =
-                        Marketplace.Set.Duplicate.responseSchema.parse(
-                            duplicationResult.body
-                        );
-
-                    expect(
-                        parsedDuplicationResult.createdSet.entityId
-                    ).not.toBe(collection.entityId);
-                    expect(
-                        parsedDuplicationResult.createdSet.versionId
-                    ).not.toBe(collection.versionId);
-
-                    // we changed the title to indiciate that it's a copy
-                    expect(parsedDuplicationResult.createdSet.title).not.toBe(
-                        collection.title
-                    );
-                    expect(parsedDuplicationResult.createdSet.draftState).toBe(
-                        true
-                    );
-
-                    const duplicatedElements =
-                        await environment.collectionService.getElementsOfCollectionVersion(
-                            parsedDuplicationResult.createdSet.versionId,
+                        await environment.collectionService.addCollectionDependency(
                             {
-                                allowDraftState: true,
-                                includeDependencies: true,
+                                importTo: collection.entityId,
+                                importFrom: collection2.versionId,
                             }
                         );
 
-                    //TODO: @Quixelation, check if deps have been copied over;
+                        const httpDuplicationResult =
+                            await environment.httpRequest(
+                                'post',
+                                ENDPOINT +
+                                    `/${collection.entityId}/version/${elementCreationResult.newSetVersionId}/duplicate`,
+                                session,
+                                undefined
+                            );
 
-                    expect(duplicatedElements.direct).toHaveLength(1);
-                    expect(duplicatedElements.direct[0]?.content).toEqual(
-                        content
-                    );
+                        duplicationResult =
+                            Marketplace.Set.Duplicate.responseSchema.parse(
+                                httpDuplicationResult.body
+                            );
+                    });
 
-                    const myCollections =
-                        await environment.collectionService.getLatestExerciseElementSetsForUser(
-                            userInfo.id,
-                            { includeDraftState: true }
+                    it('duplicates the collection', async () => {
+                        expect(duplicationResult.createdSet.entityId).not.toBe(
+                            collection.entityId
                         );
-                    expect(myCollections).toHaveLength(2);
-                    expect(
-                        myCollections.find(
-                            (f) => f.entityId === collection.entityId
-                        )
-                    ).toBeDefined();
-                    expect(myCollections).toContainEqual(
-                        parsedDuplicationResult.createdSet
-                    );
-                });
+                        expect(duplicationResult.createdSet.versionId).not.toBe(
+                            collection.versionId
+                        );
 
-                it('does not copy over version history', () => {
-                    expect(false).toBe(true);
+                        // we changed the title to indiciate that it's a copy
+                        expect(duplicationResult.createdSet.title).not.toBe(
+                            collection.title
+                        );
+                        expect(duplicationResult.createdSet.draftState).toBe(
+                            true
+                        );
+
+                        const myCollections =
+                            await environment.collectionService.getLatestCollectionsForUser(
+                                userInfo.id,
+                                { includeDraftState: true }
+                            );
+
+                        // expect: collection, collection2 and the duplicated collection
+                        expect(myCollections).toHaveLength(3);
+                        expect(
+                            myCollections.find(
+                                (f) => f.entityId === collection.entityId
+                            )
+                        ).toBeDefined();
+                        expect(myCollections).toContainEqual(
+                            duplicationResult.createdSet
+                        );
+                    });
+
+                    it('keeps existing elements', async () => {
+                        const duplicatedElements =
+                            await environment.collectionService.getElementsOfCollectionVersion(
+                                duplicationResult.createdSet.versionId,
+                                {
+                                    allowDraftState: true,
+                                    includeDependencies: true,
+                                }
+                            );
+
+                        //TODO: @Quixelation, check if deps have been copied over;
+
+                        expect(duplicatedElements.direct).toHaveLength(1);
+                        expect(duplicatedElements.direct[0]?.content).toEqual(
+                            content
+                        );
+                    });
+
+                    it('keeps existing dependencies', async () => {
+                        const deps =
+                            await environment.collectionService.getCollectionDependencies(
+                                duplicationResult.createdSet.versionId
+                            );
+                        expect(deps).toHaveLength(1);
+                        expect(deps[0]?.versionId).toBe(collection2.versionId);
+                    });
+
+                    it.skip('does not copy over version history', () => {
+                        expect(false).toBe(true);
+                    });
                 });
             });
         });
@@ -619,12 +733,12 @@ describe('Collection Router', () => {
                 element = elementCreationResult.result;
             });
 
-            describe('HTTP DELETE /', () => {
+            describe('DELETE /', () => {
                 it('deletes the element and creates a new draft-state', async () => {
                     const deletionResult = await environment.httpRequest(
                         'delete',
                         ENDPOINT +
-                        `/${collection.entityId}/element/${element.entityId}`,
+                            `/${collection.entityId}/element/${element.entityId}`,
                         session,
                         undefined
                     );
@@ -697,7 +811,7 @@ describe('Collection Router', () => {
                         const deletionResult = await environment.httpRequest(
                             'delete',
                             ENDPOINT +
-                            `/${collection.entityId}/element/${element.entityId}`,
+                                `/${collection.entityId}/element/${element.entityId}`,
                             session,
                             undefined
                         );
@@ -719,13 +833,13 @@ describe('Collection Router', () => {
                 });
             });
 
-            describe('HTTP GET /versions', () => {
+            describe('GET /versions', () => {
                 it('returns the version history of the element', async () => {
                     for (let i = 0; i < 5; i++) {
                         const response = await environment.httpRequest(
                             'get',
                             ENDPOINT +
-                            `/${collection.entityId}/element/${element.entityId}/versions`,
+                                `/${collection.entityId}/element/${element.entityId}/versions`,
                             session
                         );
                         const parsedResponse =

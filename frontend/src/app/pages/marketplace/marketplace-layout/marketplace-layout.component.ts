@@ -1,6 +1,10 @@
 import { Component, inject, OnDestroy, signal } from '@angular/core';
 import { CollectionService } from '../../../core/exercise-element.service';
-import { CollectionEntityId, isCollectionEntityId, Marketplace } from 'fuesim-digital-shared';
+import {
+    CollectionEntityId,
+    isCollectionEntityId,
+    Marketplace,
+} from 'fuesim-digital-shared';
 import {
     ActivatedRoute,
     Event,

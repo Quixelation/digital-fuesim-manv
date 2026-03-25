@@ -7,15 +7,6 @@ CREATE TABLE "collection_dependency_mapping" (
 	CONSTRAINT "unique_collection_dependency" UNIQUE("collectionVersionId","dependentCollectionVersionId")
 );
 --> statement-breakpoint
-CREATE TABLE "exercise_element_to_set_mapping" (
-	"setEntityId" varchar NOT NULL,
-	"setVersionId" varchar NOT NULL,
-	"elementEntityId" varchar NOT NULL,
-	"elementVersionId" varchar NOT NULL,
-	CONSTRAINT "unique_element_set_mapping" UNIQUE("setVersionId","elementVersionId"),
-	CONSTRAINT "unique_element_set_mapping_2" UNIQUE("setVersionId","elementEntityId")
-);
---> statement-breakpoint
 CREATE TABLE "exercise_element_sets" (
 	"versionId" varchar PRIMARY KEY NOT NULL,
 	"entityId" varchar NOT NULL,
@@ -31,6 +22,16 @@ CREATE TABLE "exercise_element_sets" (
 	CONSTRAINT "exercise_element_sets_versionId_unique" UNIQUE("versionId"),
 	CONSTRAINT "unique_set_version" UNIQUE("entityId","version"),
 	CONSTRAINT "unique_set_id" UNIQUE("entityId","versionId")
+);
+--> statement-breakpoint
+CREATE TABLE "exercise_element_to_set_mapping" (
+	"setEntityId" varchar NOT NULL,
+	"setVersionId" varchar NOT NULL,
+	"elementEntityId" varchar NOT NULL,
+	"elementVersionId" varchar NOT NULL,
+	"isBaseReference" boolean DEFAULT false,
+	CONSTRAINT "unique_element_set_mapping" UNIQUE("setVersionId","elementVersionId"),
+	CONSTRAINT "unique_element_set_mapping_2" UNIQUE("setVersionId","elementEntityId")
 );
 --> statement-breakpoint
 CREATE TABLE "exercise_element_templates" (
@@ -51,6 +52,4 @@ CREATE TABLE "exercise_element_templates" (
 ALTER TABLE "collection_dependency_mapping" ADD CONSTRAINT "collection_dependency_mapping_collectionVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("collectionVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "collection_dependency_mapping" ADD CONSTRAINT "collection_dependency_mapping_dependentCollectionVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("dependentCollectionVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "exercise_element_to_set_mapping" ADD CONSTRAINT "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk" FOREIGN KEY ("setVersionId") REFERENCES "public"."exercise_element_sets"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "exercise_element_to_set_mapping" ADD CONSTRAINT "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk" FOREIGN KEY ("elementVersionId") REFERENCES "public"."exercise_element_templates"("versionId") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE VIEW "public"."latest_exercise_element_template_version_numbers" AS (select "entityId", max("version") as "latestversion" from "exercise_element_templates" group by "exercise_element_templates"."entityId");--> statement-breakpoint
-CREATE VIEW "public"."latest_exercise_element_templates" AS (select "exercise_element_templates"."versionId", "exercise_element_templates"."entityId", "exercise_element_templates"."version", "exercise_element_templates"."stateVersion", "exercise_element_templates"."createdBy", "exercise_element_templates"."createdAt", "exercise_element_templates"."title", "exercise_element_templates"."description", "exercise_element_templates"."content" from "exercise_element_templates" inner join "latest_exercise_element_template_version_numbers" on ("exercise_element_templates"."entityId" = "latest_exercise_element_template_version_numbers"."entityId" and "exercise_element_templates"."version" = "latestversion"));
+ALTER TABLE "exercise_element_to_set_mapping" ADD CONSTRAINT "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk" FOREIGN KEY ("elementVersionId") REFERENCES "public"."exercise_element_templates"("versionId") ON DELETE cascade ON UPDATE no action;

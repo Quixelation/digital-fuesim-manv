@@ -1,5 +1,5 @@
 {
-    "id": "daf5cc63-ef33-4325-9691-127c9ef8f3c2",
+    "id": "e0f812f1-2c5f-4e6f-9c9a-dafa5ff8f5c2",
     "prevId": "c18a95bf-3849-46e9-b391-d66b5f6c2f14",
     "version": "7",
     "dialect": "postgresql",
@@ -123,73 +123,6 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.exercise_element_to_set_mapping": {
-            "name": "exercise_element_to_set_mapping",
-            "schema": "",
-            "columns": {
-                "setEntityId": {
-                    "name": "setEntityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "setVersionId": {
-                    "name": "setVersionId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "elementEntityId": {
-                    "name": "elementEntityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "elementVersionId": {
-                    "name": "elementVersionId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                }
-            },
-            "indexes": {},
-            "foreignKeys": {
-                "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk": {
-                    "name": "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk",
-                    "tableFrom": "exercise_element_to_set_mapping",
-                    "tableTo": "exercise_element_sets",
-                    "columnsFrom": ["setVersionId"],
-                    "columnsTo": ["versionId"],
-                    "onDelete": "cascade",
-                    "onUpdate": "no action"
-                },
-                "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk": {
-                    "name": "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk",
-                    "tableFrom": "exercise_element_to_set_mapping",
-                    "tableTo": "exercise_element_templates",
-                    "columnsFrom": ["elementVersionId"],
-                    "columnsTo": ["versionId"],
-                    "onDelete": "cascade",
-                    "onUpdate": "no action"
-                }
-            },
-            "compositePrimaryKeys": {},
-            "uniqueConstraints": {
-                "unique_element_set_mapping": {
-                    "name": "unique_element_set_mapping",
-                    "nullsNotDistinct": false,
-                    "columns": ["setVersionId", "elementVersionId"]
-                },
-                "unique_element_set_mapping_2": {
-                    "name": "unique_element_set_mapping_2",
-                    "nullsNotDistinct": false,
-                    "columns": ["setVersionId", "elementEntityId"]
-                }
-            },
-            "policies": {},
-            "checkConstraints": {},
-            "isRLSEnabled": false
-        },
         "public.exercise_element_sets": {
             "name": "exercise_element_sets",
             "schema": "",
@@ -283,6 +216,80 @@
                     "name": "unique_set_id",
                     "nullsNotDistinct": false,
                     "columns": ["entityId", "versionId"]
+                }
+            },
+            "policies": {},
+            "checkConstraints": {},
+            "isRLSEnabled": false
+        },
+        "public.exercise_element_to_set_mapping": {
+            "name": "exercise_element_to_set_mapping",
+            "schema": "",
+            "columns": {
+                "setEntityId": {
+                    "name": "setEntityId",
+                    "type": "varchar",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "setVersionId": {
+                    "name": "setVersionId",
+                    "type": "varchar",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "elementEntityId": {
+                    "name": "elementEntityId",
+                    "type": "varchar",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "elementVersionId": {
+                    "name": "elementVersionId",
+                    "type": "varchar",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "isBaseReference": {
+                    "name": "isBaseReference",
+                    "type": "boolean",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "default": false
+                }
+            },
+            "indexes": {},
+            "foreignKeys": {
+                "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk": {
+                    "name": "exercise_element_to_set_mapping_setVersionId_exercise_element_sets_versionId_fk",
+                    "tableFrom": "exercise_element_to_set_mapping",
+                    "tableTo": "exercise_element_sets",
+                    "columnsFrom": ["setVersionId"],
+                    "columnsTo": ["versionId"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk": {
+                    "name": "exercise_element_to_set_mapping_elementVersionId_exercise_element_templates_versionId_fk",
+                    "tableFrom": "exercise_element_to_set_mapping",
+                    "tableTo": "exercise_element_templates",
+                    "columnsFrom": ["elementVersionId"],
+                    "columnsTo": ["versionId"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {
+                "unique_element_set_mapping": {
+                    "name": "unique_element_set_mapping",
+                    "nullsNotDistinct": false,
+                    "columns": ["setVersionId", "elementVersionId"]
+                },
+                "unique_element_set_mapping_2": {
+                    "name": "unique_element_set_mapping_2",
+                    "nullsNotDistinct": false,
+                    "columns": ["setVersionId", "elementEntityId"]
                 }
             },
             "policies": {},
@@ -657,88 +664,7 @@
     "sequences": {},
     "roles": {},
     "policies": {},
-    "views": {
-        "public.latest_exercise_element_template_version_numbers": {
-            "columns": {
-                "entityId": {
-                    "name": "entityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                }
-            },
-            "definition": "select \"entityId\", max(\"version\") as \"latestversion\" from \"exercise_element_templates\" group by \"exercise_element_templates\".\"entityId\"",
-            "name": "latest_exercise_element_template_version_numbers",
-            "schema": "public",
-            "isExisting": false,
-            "materialized": false
-        },
-        "public.latest_exercise_element_templates": {
-            "columns": {
-                "versionId": {
-                    "name": "versionId",
-                    "type": "varchar",
-                    "primaryKey": true,
-                    "notNull": true
-                },
-                "entityId": {
-                    "name": "entityId",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "version": {
-                    "name": "version",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "stateVersion": {
-                    "name": "stateVersion",
-                    "type": "integer",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "createdBy": {
-                    "name": "createdBy",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "'unknown'"
-                },
-                "createdAt": {
-                    "name": "createdAt",
-                    "type": "timestamp with time zone",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "now()"
-                },
-                "title": {
-                    "name": "title",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "description": {
-                    "name": "description",
-                    "type": "varchar",
-                    "primaryKey": false,
-                    "notNull": true
-                },
-                "content": {
-                    "name": "content",
-                    "type": "json",
-                    "primaryKey": false,
-                    "notNull": true
-                }
-            },
-            "definition": "select \"exercise_element_templates\".\"versionId\", \"exercise_element_templates\".\"entityId\", \"exercise_element_templates\".\"version\", \"exercise_element_templates\".\"stateVersion\", \"exercise_element_templates\".\"createdBy\", \"exercise_element_templates\".\"createdAt\", \"exercise_element_templates\".\"title\", \"exercise_element_templates\".\"description\", \"exercise_element_templates\".\"content\" from \"exercise_element_templates\" inner join \"latest_exercise_element_template_version_numbers\" on (\"exercise_element_templates\".\"entityId\" = \"latest_exercise_element_template_version_numbers\".\"entityId\" and \"exercise_element_templates\".\"version\" = \"latestversion\")",
-            "name": "latest_exercise_element_templates",
-            "schema": "public",
-            "isExisting": false,
-            "materialized": false
-        }
-    },
+    "views": {},
     "_meta": {
         "columns": {},
         "schemas": {},

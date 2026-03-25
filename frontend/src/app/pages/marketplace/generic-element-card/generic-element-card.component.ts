@@ -15,4 +15,5 @@ export class GenericElementCardComponent {
 
     public readonly edit = output();
     public readonly delete = output();
+    public readonly duplicate = output();
 }

@@ -25,10 +25,13 @@
                 >
                     <i class="bi bi-pen"></i>
                 </button>
-                <button class="btn btn-outline-primary btn-sm">
+                <button class="btn btn-outline-primary btn-sm" (click)="duplicate.emit()">
                     <i class="bi bi-copy"></i>
                 </button>
-                <button class="btn btn-outline-danger btn-sm" (click)="delete.emit()">
+                <button
+                    class="btn btn-outline-danger btn-sm"
+                    (click)="delete.emit()"
+                >
                     <i class="bi bi-trash"></i>
                 </button>
             </div>

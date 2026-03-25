@@ -158,6 +158,10 @@ export class TestEnvironment {
         return this._actionRepository;
     }
 
+    public get collectionRepository(): CollectionRepository {
+        return this._collectionRepository;
+    }
+
     public httpRequest<TData extends string | object>(
         method: HttpMethod,
         url: string,

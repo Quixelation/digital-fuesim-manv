@@ -64,7 +64,17 @@ export class ElementCardComponent {
         } satisfies EditingVersionedElementModalData<VersionedElementContent>;
     }
 
-    async deleteElement(){
-        await this.collectionService.deleteElement(this.element().entityId, this.collection()!.entityId);
+    async deleteElement() {
+        await this.collectionService.deleteElement(
+            this.element().entityId,
+            this.collection()!.entityId
+        );
+    }
+
+    async duplicateElement() {
+        this.collectionService.duplicateElement({
+            collectionEntity: this.collection()!.entityId,
+            element: this.element()
+        })
     }
 }

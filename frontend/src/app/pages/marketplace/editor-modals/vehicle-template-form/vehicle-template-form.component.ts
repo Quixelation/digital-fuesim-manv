@@ -48,7 +48,9 @@ import { BaseVersionedElementSubmodal } from '../base-versioned-element-submodal
     templateUrl: './vehicle-template-form.component.html',
     styleUrls: ['./vehicle-template-form.component.scss'],
 })
-export class VehicleTemplateFormMarketplaceComponent implements OnInit, BaseVersionedElementSubmodal<VehicleTemplate> {
+export class VehicleTemplateFormMarketplaceComponent
+    implements BaseVersionedElementSubmodal<VehicleTemplate>
+{
     private readonly messageService = inject(MessageService);
     private readonly store = inject<Store<AppState>>(Store);
 
@@ -75,13 +77,15 @@ export class VehicleTemplateFormMarketplaceComponent implements OnInit, BaseVers
     public materialTemplates$ = this.store.select(selectMaterialTemplates);
     public personnelTemplates$ = this.store.select(selectPersonnelTemplates);
 
-    ngOnInit(): void {
-        const data = this.data();
-        if (data.isEditMode) {
-            this.values.set(
-                cloneDeepMutable(data.element.content as VehicleTemplate)
-            );
-        }
+    constructor() {
+        effect(() => {
+            const data = this.data();
+            if (data.isEditMode) {
+                this.values.set(
+                    cloneDeepMutable(data.element.content as VehicleTemplate)
+                );
+            }
+        });
     }
 
     /**

@@ -39,33 +39,37 @@
             </ul>
         }
         <div class="modal-body">
-            <div class="alert alert-warning" role="alert">
-                Sie betrachten eine frühere Version der Fahrzeugvorlage.
-                <br />
-                Bitte wechseln Sie zurück zur aktuellen Version, um Änderungen
-                vorzunehmen.
-            </div>
+            @if (timeTravelMode()) {
+                <div class="alert alert-warning" role="alert">
+                    Sie betrachten eine frühere Version der Fahrzeugvorlage.
+                    <br />
+                    Bitte wechseln Sie zurück zur aktuellen Version, um
+                    Änderungen vorzunehmen.
+                </div>
+            }
             @switch (data.type) {
                 @case ('vehicleTemplate') {
                     <app-vehicle-template-form-marketplace
-                        [data]="data"
+                        [data]="selectedVersionData()"
                         (submit)="submit($event)"
                         [btnText]="
                             data.isEditMode
                                 ? 'Änderungen speichern'
                                 : 'Fahrzeugvorlage hinzufügen'
                         "
+                        [disabled]="timeTravelMode()"
                     ></app-vehicle-template-form-marketplace>
                 }
                 @case ('alarmGroup') {
                     <app-alarmgroup-element-modal
-                        [data]="data"
+                        [data]="selectedVersionData()"
                         [btnText]="
                             data.isEditMode
                                 ? 'Änderungen speichern'
                                 : 'Alarmgruppe hinzufügen'
                         "
                         (submit)="submit($event)"
+                        [disabled]="timeTravelMode()"
                     />
                 }
             }

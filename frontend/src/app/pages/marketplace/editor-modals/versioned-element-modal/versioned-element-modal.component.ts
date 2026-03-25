@@ -10,6 +10,7 @@ import { CollectionService } from '../../../../core/exercise-element.service';
 import { VehicleTemplateFormMarketplaceComponent } from '../vehicle-template-form/vehicle-template-form.component';
 import { AlarmgroupElementModalComponent } from '../alarmgroup-element-modal/alarmgroup-element-modal.component';
 import { LocaleDatePipe } from '../../../../shared/pipes/localeDate.pipe';
+import { JsonPipe } from '@angular/common';
 
 export interface SharedVersionedElementModalData<T> {
     onSubmit: (values: T) => void;
@@ -40,6 +41,7 @@ export type VersionedElementModalData<T> =
         VehicleTemplateFormMarketplaceComponent,
         AlarmgroupElementModalComponent,
         LocaleDatePipe,
+        JsonPipe,
     ],
     templateUrl: './versioned-element-modal.component.html',
     styleUrl: './versioned-element-modal.component.scss',
@@ -52,11 +54,32 @@ export class VersionedElementModalComponent {
     public data!: VersionedElementModalData<any>;
 
     public readonly selectedVersion = signal<number | null>(null);
-    public readonly selectedVehicleVersionData = computed(() => {
-        if (this.selectedVersion() === null) {
-            return null;
+    public readonly selectedVersionData = computed<
+        VersionedElementModalData<any>
+    >(() => {
+        console.log(
+            'Computing selectedVersionData with selectedVersion:',
+            this.selectedVersion()
+        );
+        if (this.timeTravelMode()) {
+            console.log(
+                'Time travel mode is active. Finding version data for version:',
+                this.selectedVersion()
+            );
+            return {
+                ...this.data,
+                element: this.findVersionData(this.selectedVersion()!),
+            };
         }
-        return this.findVersionData(this.selectedVersion()!);
+        console.log('Time travel mode is not active. Returning current data.');
+        return this.data;
+    });
+
+    public readonly timeTravelMode = computed<boolean>(() => {
+        if (this.data.isEditMode === false) return false;
+        if (this.selectedVersion() === null) return false;
+
+        return this.selectedVersion() !== this.data.element.version;
     });
 
     public readonly versionHistory = signal<ElementDto[] | null>(null);
@@ -66,6 +89,7 @@ export class VersionedElementModalComponent {
     }
 
     public findVersionData(version: number) {
+        console.log('Finding version data for version:', version);
         const versionData = this.versionHistory()
             ? this.versionHistory()!.find((v) => v.version === version)
             : null;
@@ -73,8 +97,9 @@ export class VersionedElementModalComponent {
         if (!versionData) {
             throw new Error('Version data not found for version ' + version);
         }
+        console.log('Found version data:', versionData);
 
-        return {};
+        return versionData;
     }
 
     public async ngOnInit() {

@@ -4,7 +4,16 @@ import {
     ExerciseElementSetSubscriptionData,
 } from '../../../core/exercise-element.service';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AlarmGroup, CollectionEntityId, CollectionVersionId, ElementEntityId, isCollectionEntityId, Marketplace, VersionedElementContent } from 'fuesim-digital-shared';
+import {
+    AlarmGroup,
+    CollectionEntityId,
+    CollectionVersionId,
+    ElementEntityId,
+    isCollectionEntityId,
+    Marketplace,
+    VersionedCollectionPartial,
+    VersionedElementContent,
+} from 'fuesim-digital-shared';
 import { Subject, takeUntil } from 'rxjs';
 import {
     NgbDropdown,
@@ -25,9 +34,11 @@ import {
 } from '../editor-modals/versioned-element-modal/versioned-element-modal.component';
 import { ElementCardComponent } from '../element-card/element-card.component';
 import { LocaleDatePipe } from '../../../shared/pipes/localeDate.pipe';
-import { JsonPipe } from '@angular/common';
+import { AsyncPipe, JsonPipe } from '@angular/common';
 import { VersionedElementDisplayNamePipe } from '../../../shared/pipes/versioned-element-type-display-name.pipe';
 import { Collection } from 'ol';
+import { UsedCollectionsTabComponent } from './used-collections-tab/used-collections-tab.component';
+import { CollectionDetailsTabComponent } from './collection-details-tab/collection-details-tab.component';
 
 @Component({
     selector: 'app-marketplace-set-detail',
@@ -37,6 +48,9 @@ import { Collection } from 'ol';
         NgbDropdownModule,
         VersionedElementDisplayNamePipe,
         NgbNavModule,
+        AsyncPipe,
+        UsedCollectionsTabComponent,
+        CollectionDetailsTabComponent,
     ],
     templateUrl: './marketplace-set-detail.component.html',
     styleUrl: './marketplace-set-detail.component.scss',
@@ -67,8 +81,10 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
 
     // This array defined the order in which the element types are displayed in the UI.
     // Types not included in this array will NOT be displayed in the UI
-    public visibleElementTypesOrder: VersionedElementContent['type'][] =
-        ['vehicleTemplate', 'alarmGroup'];
+    public visibleElementTypesOrder: VersionedElementContent['type'][] = [
+        'vehicleTemplate',
+        'alarmGroup',
+    ];
 
     private subscription: (() => void) | null = null;
 
@@ -100,8 +116,6 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
                     );
             });
     }
-
-    public availableCollections = this.collectionService.elementSets;
 
     public createNewAlarmgroup() {
         const selectedSetData = this.selectedSetData?.();
@@ -164,12 +178,6 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
         await this.collectionService.deleteElement(entityId, this._setEntityId);
     }
 
-    public async makeSetPublic() {
-        if (!this._setEntityId) return;
-
-        await this.collectionService.makeCollectionPublic(this._setEntityId);
-    }
-
     public async duplicateSet() {
         const selectedVersion = this.selectedSetData()?.collection.versionId;
         if (!selectedVersion) return;
@@ -181,15 +189,6 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
         );
     }
 
-    public async importFromCollection(
-        collectionVersionId: CollectionVersionId
-    ) {
-        await this.collectionService.addCollectionDependency({
-            importTo: this._setEntityId,
-            importFrom: collectionVersionId,
-        });
-    }
-
     public async removeCollectionDependency(
         collectionVersionId: CollectionVersionId
     ) {
@@ -197,14 +196,6 @@ export class MarketplaceSetDetailComponent implements OnDestroy {
             removeFrom: this._setEntityId,
             removeVersionId: collectionVersionId,
         });
-    }
-
-    public async deleteSet() {
-        if (!this._setEntityId) return;
-
-        await this.collectionService.deleteCollection(this._setEntityId);
-
-        this.router.navigate(['/marketplace']);
     }
 
     public async saveDraftState() {

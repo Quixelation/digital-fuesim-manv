@@ -4,7 +4,16 @@ import { exerciseTemplateIdSchema } from './ids.js';
 import { vehicleTemplateSchema } from './models/vehicle-template.js';
 import { alarmGroupSchema } from './models/alarm-group.js';
 import { stringToDate } from './models/utils/date.js';
-import { collectionDtoSchema, CollectionEntityId, collectionEntityIdSchema, collectionVersionIdSchema, collectionVisibilitySchema, elementDtoSchema, elementEntityIdSchema, versionedElementContentSchema } from './models/index.js';
+import {
+    collectionDtoSchema,
+    CollectionEntityId,
+    collectionEntityIdSchema,
+    collectionVersionIdSchema,
+    collectionVisibilitySchema,
+    elementDtoSchema,
+    elementEntityIdSchema,
+    versionedElementContentSchema,
+} from './models/index.js';
 
 export const exerciseKeysSchema = z.object({
     participantKey: participantKeySchema,
@@ -32,7 +41,6 @@ export interface AuthQueryParams {
     loginFailure?: string;
     loginSuccess?: boolean;
 }
-
 
 export const getExerciseResponseDataSchema = z.object({
     participantKey: participantKeySchema,
@@ -138,7 +146,7 @@ export namespace Marketplace {
     export namespace Element {
         export const Create = new Route({
             request: z.object({
-                data: versionedElementContentSchema
+                data: versionedElementContentSchema,
             }),
             response: z.object({
                 newSetVersionId: collectionVersionIdSchema,
@@ -156,13 +164,22 @@ export namespace Marketplace {
             }),
         });
 
+        export const Duplicate = new Route({
+            response: z.object({
+                newSetVersionId: collectionVersionIdSchema,
+                result: elementDtoSchema,
+            }),
+        })
+
         export const Delete = new Route({
             response: z.object({
                 newSetVersionId: collectionVersionIdSchema.nullable(),
-                requiresConfirmation: z.array(z.object({
-                    element: elementDtoSchema,
-                    blocking: z.boolean()
-                }))
+                requiresConfirmation: z.array(
+                    z.object({
+                        element: elementDtoSchema,
+                        blocking: z.boolean(),
+                    })
+                ),
             }),
         });
 
@@ -178,6 +195,22 @@ export namespace Marketplace {
             request: z.object({
                 title: z.string().trim().nonempty(),
             }),
+            response: z.object({
+                result: collectionDtoSchema,
+            }),
+        });
+
+        export const editableCollectionPropertiesSchema = z.object({
+            title: z.string().trim().nonempty().optional(),
+            description: z.string().trim().nonempty().optional(),
+        });
+
+        export type EditableCollectionProperties = z.infer<
+            typeof editableCollectionPropertiesSchema
+        >;
+
+        export const Edit = new Route({
+            request: editableCollectionPropertiesSchema,
             response: z.object({
                 result: collectionDtoSchema,
             }),
@@ -231,6 +264,7 @@ export namespace Marketplace {
         export const Import = new Route({
             response: z.object({
                 importedSet: transitiveCollectionSchema,
+                newCollectionVersionId: collectionVersionIdSchema,
             }),
         });
 

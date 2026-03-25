@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { uuidSchema, uuid } from '../../utils/index.js';
 import { Marketplace } from '../../http-interfaces.js';
-import { ElementVersionId, elementVersionIdSchema } from '../versioned-elements.js';
+import {
+    ElementVersionId,
+    elementVersionIdSchema,
+} from '../versioned-elements.js';
 
 export const alarmGroupVehicleSchema = z.strictObject({
     id: uuidSchema,

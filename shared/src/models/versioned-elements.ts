@@ -1,15 +1,18 @@
 import * as z from 'zod';
 import { stateVersionedEntitySchema } from './state-versioned-entity.js';
-import { versionedElementContentSchema, VersionedElementContent } from './utils/versioned-element-content.js';
-
+import {
+    versionedElementContentSchema,
+    VersionedElementContent,
+} from './utils/versioned-element-content.js';
 
 export const elementEntityIdSchema = z
     .string()
     .regex(/^element_entity_.+$/u)
     .brand<'ElementEntityId'>();
 export type ElementEntityId = z.infer<typeof elementEntityIdSchema>;
-export const isElementEntityId = (value: string | null): value is ElementEntityId =>
-    elementEntityIdSchema.safeParse(value).success;
+export const isElementEntityId = (
+    value: string | null
+): value is ElementEntityId => elementEntityIdSchema.safeParse(value).success;
 
 export const elementVersionIdSchema = z
     .string()
@@ -19,14 +22,13 @@ export type ElementVersionId = z.infer<typeof elementVersionIdSchema>;
 export const isElementVersionId = (value: string): value is ElementVersionId =>
     elementVersionIdSchema.safeParse(value).success;
 
-
 export const versionedElementPartialSchema = z.strictObject({
     entityId: elementEntityIdSchema,
     versionId: elementVersionIdSchema,
 });
-export type VersionedElementPartial = z.infer<typeof versionedElementPartialSchema>;
-
-
+export type VersionedElementPartial = z.infer<
+    typeof versionedElementPartialSchema
+>;
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 export const versionedElementTypeDisplayNames: Record<

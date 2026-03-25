@@ -41,7 +41,7 @@ import { BaseVersionedElementSubmodal } from '../base-versioned-element-submodal
     styleUrl: './alarmgroup-element-modal.component.scss',
 })
 export class AlarmgroupElementModalComponent
-    implements OnInit, BaseVersionedElementSubmodal<AlarmGroup>
+    implements BaseVersionedElementSubmodal<AlarmGroup>
 {
     public data = input.required<VersionedElementModalData<any>>();
     public btnText = input.required<string>();
@@ -66,13 +66,15 @@ export class AlarmgroupElementModalComponent
         ) as TypedElementDto<VehicleTemplate>[];
     });
 
-    ngOnInit() {
-        const data = this.data();
-        if (data.isEditMode) {
-            this.values.set(
-                cloneDeepMutable(data.element.content as AlarmGroup)
-            );
-        }
+    constructor() {
+        effect(() => {
+            const data = this.data();
+            if (data.isEditMode) {
+                this.values.set(
+                    cloneDeepMutable(data.element.content as AlarmGroup)
+                );
+            }
+        });
     }
 
     public addVehicle(vehicle: TypedElementDto<VehicleTemplate>) {
